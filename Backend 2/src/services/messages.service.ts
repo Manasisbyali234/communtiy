@@ -119,7 +119,7 @@ export const messagesService = {
     for (const p of otherParticipants) {
       await notificationsService.create({
         recipientId: p.userId,
-        type: 'NEW_MESSAGE',
+        type: 'MESSAGE',
         actorId: senderId,
         entityId: message.id,
         entityType: 'Message',

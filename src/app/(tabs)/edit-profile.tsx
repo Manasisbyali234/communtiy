@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
-import { apiClient } from '../../api/client';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, ScrollView, KeyboardAvoidingView, Platform, TouchableOpacity, Dimensions } from 'react-native';
+import { Image } from 'expo-image';
+import { apiClient, API_BASE_URL } from '../../api/client';
+
+const BASE = API_BASE_URL.replace('/api/v1', '');
+const toAbsUrl = (url?: string | null) =>
+  url && url.startsWith('/') ? `${BASE}${url}` : url;
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useForm, Controller } from 'react-hook-form';
@@ -13,7 +18,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import Avatar from '../../components/common/Avatar';
 import { Ionicons } from '@expo/vector-icons';
-import { pickImage, uploadImage, PickedImage } from '../../utils/imagePicker';
+import { pickImage, uploadProfilePhoto, uploadCoverPhoto, PickedImage } from '../../utils/imagePicker';
 
 const profileSchema = z.object({
   displayName: z.string().min(2, 'Name must be at least 2 characters').max(30, 'Name must be under 30 characters'),
@@ -33,6 +38,14 @@ export default function EditProfile() {
   const router = useRouter();
   const { user, updateProfile } = useAuthStore();
   const showToast = useToastStore((state) => state.showToast);
+
+  // Sync latest profile from server on mount so cover/avatar are current.
+  useEffect(() => {
+    apiClient.get('/users/me').then((res) => {
+      const fresh = res.data?.data ?? res.data;
+      if (fresh) updateProfile(fresh);
+    }).catch(() => {});
+  }, []);
 
   const {
     control,
@@ -56,6 +69,10 @@ export default function EditProfile() {
   const [pickedImage, setPickedImage] = useState<PickedImage | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
+  const [localCoverUri, setLocalCoverUri] = useState<string | null>(null);
+  const [pickedCover, setPickedCover] = useState<PickedImage | null>(null);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+
   const handlePickPhoto = async () => {
     setPhotoError(null);
     try {
@@ -69,25 +86,50 @@ export default function EditProfile() {
     }
   };
 
+  const handlePickCover = async () => {
+    try {
+      const picked = await pickImage();
+      if (picked) {
+        setLocalCoverUri(picked.localUri);
+        setPickedCover(picked);
+        setCoverRemoved(false);
+      }
+    } catch (_) {}
+  };
+
+  const handleRemoveCover = () => {
+    setLocalCoverUri(null);
+    setPickedCover(null);
+    setCoverRemoved(true);
+  };
+
   const onSubmit = async (data: ProfileFormValues) => {
     try {
       let avatarUrl: string | undefined = data.avatarUrl || undefined;
       if (pickedImage) {
-        const uploaded = await uploadImage(pickedImage);
+        const uploaded = await uploadProfilePhoto(pickedImage);
         if (uploaded) {
-          // Normalize relative URL to absolute
-          avatarUrl = uploaded.startsWith('http')
-            ? uploaded
-            : `${apiClient.defaults.baseURL!.replace('/api/v1', '')}${uploaded}`;
+          avatarUrl = toAbsUrl(uploaded) ?? undefined;
         } else {
           showToast('Photo upload failed, other changes will still save.', 'error');
         }
+      }
+
+      let coverImage: string | null | undefined = undefined;
+      if (pickedCover) {
+        const uploaded = await uploadCoverPhoto(pickedCover);
+        if (uploaded) {
+          coverImage = toAbsUrl(uploaded);
+        }
+      } else if (coverRemoved) {
+        coverImage = null;
       }
 
       const res = await apiClient.put('/users/me', {
         displayName: data.displayName,
         bio: data.bio || undefined,
         avatarUrl: avatarUrl || undefined,
+        ...(coverImage !== undefined ? { coverImage } : {}),
         village: data.village || undefined,
         occupation: data.occupation || undefined,
         languages: data.languages || undefined,
@@ -95,8 +137,8 @@ export default function EditProfile() {
       });
 
       const updated = res.data?.data ?? res.data;
-      // Ensure avatarUrl in store is always absolute
       if (avatarUrl) updated.avatarUrl = avatarUrl;
+      if (coverImage !== undefined) updated.coverImage = coverImage;
       updateProfile(updated);
       showToast('Profile updated successfully!', 'success');
       router.back();
@@ -127,6 +169,33 @@ export default function EditProfile() {
             Edit Profile
           </Text>
           <View style={{ width: 24 }} />
+        </View>
+
+        {/* Cover Photo Section */}
+        <View style={styles.coverSection}>
+          <TouchableOpacity onPress={handlePickCover} activeOpacity={0.85} style={styles.coverContainer}>
+            {(localCoverUri || (!coverRemoved && user.coverImage)) ? (
+              <Image
+                source={{ uri: localCoverUri || user.coverImage }}
+                style={styles.coverImage}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={[styles.coverPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Ionicons name="image-outline" size={32} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 6 }}>Add Cover Photo</Text>
+              </View>
+            )}
+            <View style={styles.coverEditBadge}>
+              <Ionicons name="camera" size={16} color="#FFF" />
+            </View>
+          </TouchableOpacity>
+          {(localCoverUri || (!coverRemoved && user.coverImage)) && (
+            <TouchableOpacity onPress={handleRemoveCover} style={styles.removeCoverBtn}>
+              <Ionicons name="trash-outline" size={14} color={colors.error ?? '#C62828'} />
+              <Text style={{ color: colors.error ?? '#C62828', fontSize: 12, fontWeight: '600' }}>Remove Cover</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Change Photo Option */}
@@ -280,6 +349,46 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     fontWeight: '700',
+  },
+  coverSection: {
+    marginBottom: 0,
+  },
+  coverContainer: {
+    width: '100%',
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 8,
+  },
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+  },
+  coverEditBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 20,
+    padding: 7,
+  },
+  removeCoverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-end',
+    paddingVertical: 4,
+    marginBottom: 12,
   },
   avatarSection: {
     alignItems: 'center',

@@ -16,6 +16,7 @@ const ReplySchema = z.object({ content: z.string().min(1).max(500) });
 router.use(auth);
 
 router.get('/feed', storiesController.getFeed);
+router.get('/:id', storiesController.getStory);
 router.post('/', validate({ body: CreateStorySchema }), storiesController.createStory);
 router.delete('/:id', storiesController.deleteStory);
 router.post('/:id/view', storiesController.viewStory);

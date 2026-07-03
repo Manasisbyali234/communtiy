@@ -3,6 +3,7 @@ import { apiClient } from './client';
 import { Message, Notification, PaginatedResponse, ApiResponse, Conversation } from '../types';
 import { useEffect } from 'react';
 import { getSocket } from './socket';
+import { useAuthStore } from '../store/authStore';
 
 export const chatKeys = {
   all: ['chats'] as const,
@@ -12,11 +13,19 @@ export const chatKeys = {
 
 // Fetch active chat list
 export function useChatsQuery() {
+  const currentUserId = useAuthStore((s) => s.user?.id);
   return useQuery<Conversation[]>({
     queryKey: chatKeys.list(),
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<Conversation[]>>('/messages/conversations');
-      return res.data.data;
+      const conversations = res.data.data;
+      // Inject `participant` helper from the participants array
+      return conversations.map((conv) => ({
+        ...conv,
+        participant:
+          conv.participant ??
+          conv.participants?.find((p) => p.userId !== currentUserId)?.user,
+      }));
     },
   });
 }
@@ -26,6 +35,7 @@ export function useMessagesQuery(chatId: string) {
   return useQuery<Message[]>(
     {
       queryKey: chatKeys.messages(chatId),
+      enabled: !!chatId,
       queryFn: async () => {
         const res = await apiClient.get<ApiResponse<PaginatedResponse<Message>>>(`/messages/conversations/${chatId}`);
         return res.data.data.data;
@@ -39,11 +49,16 @@ export function useSendMessageMutation() {
   const queryClient = useQueryClient();
   return useMutation<Message, Error, { chatId: string; content: string }>({
     mutationFn: async ({ chatId, content }) => {
+      console.log('[sendMessage] API payload:', { chatId, content });
       const res = await apiClient.post<ApiResponse<Message>>(`/messages/conversations/${chatId}`, { content });
+      console.log('[sendMessage] API response:', JSON.stringify(res.data));
       return res.data.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: chatKeys.messages(variables.chatId) });
+      // The socket (chat:message) already updates the messages cache in real-time.
+      // Only invalidate the conversation list so the preview/timestamp updates.
+      // Re-fetching messages here would cause duplicates because the socket already
+      // inserted the message into the cache.
       queryClient.invalidateQueries({ queryKey: chatKeys.list() });
     },
   });
@@ -79,7 +94,8 @@ export function useUnreadCountQuery() {
       const res = await apiClient.get<ApiResponse<{ count: number }>>('/notifications/unread-count');
       return res.data.data.count;
     },
-    refetchInterval: 30000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 
@@ -129,17 +145,24 @@ export function useChatSocket(conversationId?: string) {
     const socket = getSocket();
     if (!socket) return;
 
-    const handleNewMessage = (message: Message) => {
+    const handleNewMessage = (payload: any) => {
+      // Backend emits { message } (nested), normalise to a flat Message
+      const message: Message = payload?.message ?? payload;
+
+      console.log('[socket chat:message] received payload:', JSON.stringify(payload));
+      console.log('[socket chat:message] normalised message:', JSON.stringify(message));
+
       // If we are listening to a specific conversation, update its cache
       if (conversationId && message.conversationId === conversationId) {
         queryClient.setQueryData<Message[]>(chatKeys.messages(conversationId), (old) => {
           if (!old) return [message];
           // Check for duplicates
           if (old.some(m => m.id === message.id)) return old;
-          return [...old, message];
+          // Cache is stored newest-first (desc), new message goes at the front
+          return [message, ...old];
         });
       }
-      
+
       // Also update the conversation list to bump the lastMessage
       queryClient.setQueryData<Conversation[]>(chatKeys.list(), (old) => {
         if (!old) return old;

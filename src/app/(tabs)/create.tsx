@@ -24,6 +24,12 @@ const OPTIONS = [
     title: 'Create Community Page',
     desc: 'Create a new village, association, or interest-based community.',
   },
+  {
+    route: '/create/post?communityId=cmr4hbjs2000vygfwuf73rx56',
+    icon: 'newspaper-outline' as const,
+    title: 'Community Feed',
+    desc: 'Post to the community feed and share with your neighbors.',
+  },
 ];
 
 export default function CreateScreen() {

@@ -3,7 +3,7 @@ import { View, ActivityIndicator, StyleSheet, StatusBar, Platform } from 'react-
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useAuthStore, waitForHydration } from '../store/authStore';
+import { useAuthStore } from '../store/authStore';
 import { useTheme } from '../theme';
 import Toast from '../components/common/Toast';
 import { initSocket, disconnectSocket } from '../api/socket';
@@ -13,7 +13,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: false,
       refetchOnWindowFocus: false,
-      staleTime: 30_000,
+      staleTime: 60_000,
     },
   },
 });
@@ -29,22 +29,28 @@ function RootLayoutContent() {
   const router = useRouter();
   const { isAuthenticated, isOnboarded, isLoading, token } = useAuthStore();
   const [tokensInitialized, setTokensInitialized] = useState(false);
-  const [navReady, setNavReady] = useState(false);
   const redirectedToIntended = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      // On web, tokens are rehydrated by zustand persist — wait for that
-      waitForHydration().finally(() => setTokensInitialized(true));
+      // hasHydrated() may already be true synchronously — check first
+      // then fall back to the listener. A timeout ensures we never hang.
+      if (useAuthStore.persist.hasHydrated()) {
+        setTokensInitialized(true);
+        return;
+      }
+      let done = false;
+      const finish = () => { if (!done) { done = true; setTokensInitialized(true); } };
+      const unsub = useAuthStore.persist.onFinishHydration(finish);
+      // Safety timeout: if hydration never fires (e.g. empty storage), unblock after 50ms
+      const timer = setTimeout(finish, 50);
+      return () => { unsub(); clearTimeout(timer); };
     } else {
       useAuthStore.getState().initSecureTokens().finally(() => setTokensInitialized(true));
     }
   }, []);
 
-  // Mark navigator ready after first render
-  useEffect(() => { setNavReady(true); }, []);
-
-  // Initialize socket once when authenticated and token is in memory
+// Initialize socket once when authenticated and token is in memory
   useEffect(() => {
     if (isAuthenticated && tokensInitialized && token) {
       void initSocket();
@@ -55,26 +61,26 @@ function RootLayoutContent() {
   }, [isAuthenticated, tokensInitialized, token]);
 
   useEffect(() => {
-    if (isLoading || !tokensInitialized || !navReady) return;
+    if (isLoading || !tokensInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'create' || segments[0] === 'chat' || segments[0] === 'story';
+    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'create' || segments[0] === 'chat' || segments[0] === 'story' || segments[0] === 'community';
 
     if (!isAuthenticated) {
       if (!inAuthGroup) {
         router.replace(!isOnboarded ? '/(auth)/onboarding' : '/(auth)/login');
       }
     } else {
-      if (!inAppGroup) {
+      if (inAuthGroup || (!inAppGroup && segments[0] !== undefined)) {
         if (!redirectedToIntended.current && intendedPath && !intendedPath.startsWith('/(auth)') && intendedPath !== '/') {
           redirectedToIntended.current = true;
           router.replace(intendedPath as any);
-        } else {
+        } else if (!inAppGroup) {
           router.replace('/(tabs)');
         }
       }
     }
-  }, [isAuthenticated, isOnboarded, isLoading, tokensInitialized, navReady, segments]);
+  }, [isAuthenticated, isOnboarded, isLoading, tokensInitialized, segments]);
 
   if (!tokensInitialized) {
     return (

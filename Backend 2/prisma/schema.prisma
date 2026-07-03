@@ -68,6 +68,14 @@ enum NotificationType {
   STORY_LIKE
   POST_SHARE
   COMMUNITY_INVITE
+  CONNECTION_REQUEST
+  CONNECTION_ACCEPTED
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }
 
 enum OAuthProvider {
@@ -92,6 +100,7 @@ model User {
   bio          String?
   avatarUrl    String?
   bannerUrl    String?
+  coverImage   String?
   village      String?
   occupation   String?
   languages    String?
@@ -134,6 +143,8 @@ model User {
   settings           UserSetting?
   auditLogs          AuditLog[]
   uploadedFiles      MediaFile[]
+  sentConnections    ConnectionRequest[] @relation("ConnectionSender")
+  receivedConnections ConnectionRequest[] @relation("ConnectionReceiver")
 
   @@index([email])
   @@index([username])
@@ -648,6 +659,22 @@ model CacheEntry {
   
   @@index([key])
   @@index([expiresAt])
+}
+
+model ConnectionRequest {
+  id         String           @id @default(cuid())
+  senderId   String
+  sender     User             @relation("ConnectionSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User             @relation("ConnectionReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  status     ConnectionStatus @default(PENDING)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([status])
 }
 
 model DailyStats {

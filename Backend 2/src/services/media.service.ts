@@ -48,6 +48,103 @@ export const mediaService = {
     return this._uploadToS3(file, key, uploadedBy);
   },
 
+  async uploadProfilePhoto(file: UploadedFile, uploadedBy: string): Promise<{ id: string; filename: string; url: string }> {
+    if (file.size > MAX_SIZE) throw ApiError.badRequest('File too large. Maximum size is 50MB.');
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) throw ApiError.badRequest('File type not allowed.');
+
+    const extension = path.extname(file.originalname) || '.jpg';
+    const key = `profile/profile-photo-${uploadedBy}-${Date.now()}${extension}`;
+
+    return this._uploadProfileToS3(file, key, uploadedBy);
+  },
+
+  async uploadCoverPhoto(file: UploadedFile, uploadedBy: string): Promise<{ id: string; filename: string; url: string }> {
+    if (file.size > MAX_SIZE) throw ApiError.badRequest('File too large. Maximum size is 50MB.');
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) throw ApiError.badRequest('File type not allowed.');
+
+    const extension = path.extname(file.originalname) || '.jpg';
+    const key = `profile/cover-photo-${uploadedBy}-${Date.now()}${extension}`;
+
+    return this._uploadProfileToS3(file, key, uploadedBy);
+  },
+
+  async uploadChatFile(file: UploadedFile, uploadedBy: string): Promise<{ id: string; filename: string; url: string; key: string; originalName: string; mimeType: string; fileSize: number }> {
+    if (file.size > MAX_SIZE) throw ApiError.badRequest('File too large. Maximum size is 50MB.');
+
+    const normalizedMime = file.mimetype.toLowerCase();
+    const CHAT_ALLOWED = new Set([
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/heic', 'image/heif',
+      'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/x-matroska',
+      'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3',
+      'application/pdf', 'text/plain', 'text/csv',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    ]);
+    if (!CHAT_ALLOWED.has(normalizedMime)) throw ApiError.badRequest('File type not allowed.');
+
+    const extension = path.extname(file.originalname) || '';
+    const filename = `${crypto.randomUUID()}${extension}`;
+    const key = `chat/${filename}`;
+
+    await s3.send(new PutObjectCommand({
+      Bucket: storageBucket,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    }));
+
+    // Store relative proxy URL so it resolves correctly from any client IP
+    const url = `/api/v1/media/proxy/${encodeURIComponent(key)}`;
+
+    const mediaFile = await prisma.mediaFile.create({
+      data: { filename: key, originalName: file.originalname, mimeType: file.mimetype, fileSize: file.size, url, uploadedBy },
+    });
+
+    return {
+      id: mediaFile.id,
+      filename: key,
+      key,
+      url,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      fileSize: file.size,
+    };
+  },
+
+  async uploadPostImage(file: UploadedFile, uploadedBy: string): Promise<{ id: string; filename: string; url: string }> {
+    if (file.size > MAX_SIZE) throw ApiError.badRequest('File too large. Maximum size is 50MB.');
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) throw ApiError.badRequest('File type not allowed.');
+
+    const extension = path.extname(file.originalname) || '.jpg';
+    const key = `feed/post-${uploadedBy}-${Date.now()}${extension}`;
+
+    return this._uploadToS3(file, key, uploadedBy);
+  },
+
+  // Profile images use a relative proxy path so any client IP can resolve them correctly.
+  // The frontend's toAbs() in authStore prepends the correct base URL at runtime.
+  async _uploadProfileToS3(file: UploadedFile, key: string, uploadedBy: string): Promise<{ id: string; filename: string; url: string }> {
+    await s3.send(new PutObjectCommand({
+      Bucket: storageBucket,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    }));
+
+    // Store a relative URL — frontend prepends the correct host via toAbs()
+    const url = `/api/v1/media/proxy/${encodeURIComponent(key)}`;
+
+    const mediaFile = await prisma.mediaFile.create({
+      data: { filename: key, originalName: file.originalname, mimeType: file.mimetype, fileSize: file.size, url, uploadedBy },
+    });
+
+    return { id: mediaFile.id, filename: key, url };
+  },
+
   async _uploadToS3(file: UploadedFile, key: string, uploadedBy: string): Promise<{ id: string; filename: string; url: string }> {
 
     await s3.send(new PutObjectCommand({

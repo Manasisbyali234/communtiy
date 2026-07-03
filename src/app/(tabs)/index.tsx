@@ -18,6 +18,7 @@ import { useCommunitiesQuery } from '../../api/community';
 import { usePostsQuery } from '../../api/feed';
 import { useEventsQuery } from '../../api/event';
 import { useUnreadCountQuery } from '../../api/chat';
+import { useStoriesFeedQuery, StoryGroup } from '../../api/story';
 import CommentSheet from '../../components/feed/CommentSheet';
 import ForwardSheet from '../../components/feed/ForwardSheet';
 import PostCard from '../../components/feed/PostCard';
@@ -26,8 +27,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../theme';
 const FlashList = ShopifyFlashList as any;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const EVENT_CARD_WIDTH = Math.min(220, SCREEN_WIDTH * 0.58);
+const EVENT_CARD_WIDTH = Math.min(220, (Dimensions.get('window').width || 375) * 0.58);
 
 // Quick action shortcut definition
 const QUICK_ACTIONS = [
@@ -48,6 +48,7 @@ export default function HomeFeed() {
   const { data: communities = [] } = useCommunitiesQuery();
   const { data: events = [] } = useEventsQuery();
   const { data: unreadCount = 0 } = useUnreadCountQuery();
+  const { data: storyGroups = [] } = useStoriesFeedQuery();
 
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
@@ -124,15 +125,15 @@ export default function HomeFeed() {
           <Text style={[styles.storyLabel, { color: colors.textMuted }]}>Your Story</Text>
         </TouchableOpacity>
 
-        {joinedCommunities.map((s) => (
-          <TouchableOpacity key={s.id} style={styles.storyItem} onPress={() => router.push(`/story/${s.id}` as any)}>
+        {storyGroups.map((group: StoryGroup) => (
+          <TouchableOpacity key={group.user.id} style={styles.storyItem} onPress={() => router.push(`/story/${group.stories[0].id}` as any)}>
             <View style={[
               styles.storyRing,
-              { borderColor: colors.border } // Mock hasNew as false for now
+              { borderColor: group.hasUnseen ? colors.primary : colors.border }
             ]}>
-              <Image source={s.avatarUrl ? { uri: s.avatarUrl } : require('../../../assets/images/favicon.png')} style={styles.storyAvatar} contentFit="cover" />
+              <Image source={group.user.avatarUrl ? { uri: group.user.avatarUrl } : require('../../../assets/images/favicon.png')} style={styles.storyAvatar} contentFit="cover" />
             </View>
-            <Text style={[styles.storyLabel, { color: colors.textMuted }]} numberOfLines={1}>{s.name}</Text>
+            <Text style={[styles.storyLabel, { color: colors.textMuted }]} numberOfLines={1}>{group.user.displayName}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -271,7 +272,7 @@ export default function HomeFeed() {
   );
 
   // ── Header ──────────────────────────────────────────────────────────────
-  const FeedHeader = useMemo(() => (
+  const FeedHeader = (
     <View>
       {renderStoriesRow()}
       {renderWelcomeBanner()}
@@ -284,7 +285,7 @@ export default function HomeFeed() {
         </TouchableOpacity>
       </View>
     </View>
-  ), [joinedCommunities, upcomingEvents, user, colors, router]);
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>

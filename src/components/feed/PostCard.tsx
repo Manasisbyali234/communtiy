@@ -283,13 +283,17 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onCommentPr
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <View style={[styles.footer, { borderTopColor: colors.borderSecondary }]}>
-        {/* Appreciate (clap) */}
+        {/* Like (heart) */}
         <TouchableOpacity onPress={handleLikePress} activeOpacity={0.7} style={styles.actionBtn}>
           <Animated.View style={animatedIconStyle}>
-            <Text style={{ fontSize: 18 }}>{post.isLiked ? '👏' : '👏'}</Text>
+            <Ionicons
+              name={post.isLiked ? 'heart' : 'heart-outline'}
+              size={22}
+              color={post.isLiked ? '#E53935' : TEXT3}
+            />
           </Animated.View>
           {post.likesCount > 0 && (
-            <Text style={[styles.actionText, { color: post.isLiked ? G : TEXT3 }]}>
+            <Text style={[styles.actionText, { color: post.isLiked ? '#E53935' : TEXT3 }]}>
               {post.likesCount}
             </Text>
           )}

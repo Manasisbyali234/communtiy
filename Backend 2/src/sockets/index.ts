@@ -11,12 +11,12 @@ let io: Server;
 export function initSocketServer(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
-      origin: config.CORS_ORIGINS.split(',').map((o) => o.trim()),
+      origin: config.CORS_ORIGINS.trim() === '*' ? true : config.CORS_ORIGINS.split(',').map((o) => o.trim()),
       methods: ['GET', 'POST'],
       credentials: true,
       allowedHeaders: ['Authorization', 'Content-Type'],
     },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     allowEIO3: true,
   });
 

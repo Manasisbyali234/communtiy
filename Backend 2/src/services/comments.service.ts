@@ -32,21 +32,25 @@ export const commentsService = {
     if (parentId) {
       const parent = await prisma.comment.findUnique({ where: { id: parentId } });
       if (parent && parent.authorId !== authorId) {
+        const actor = await prisma.user.findUnique({ where: { id: authorId }, select: { displayName: true } });
         await notificationsService.create({
           recipientId: parent.authorId,
-          type: 'NEW_REPLY',
+          type: 'COMMENT',
           actorId: authorId,
           entityId: comment.id,
           entityType: 'Comment',
+          body: `${actor?.displayName ?? 'Someone'} replied to your comment.`,
         });
       }
     } else if (post.authorId !== authorId) {
+      const actor = await prisma.user.findUnique({ where: { id: authorId }, select: { displayName: true } });
       await notificationsService.create({
         recipientId: post.authorId,
-        type: 'NEW_COMMENT',
+        type: 'COMMENT',
         actorId: authorId,
         entityId: comment.id,
         entityType: 'Comment',
+        body: `${actor?.displayName ?? 'Someone'} commented on your post.`,
       });
     }
 

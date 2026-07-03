@@ -3,6 +3,8 @@ import { ApiError } from '../utils/ApiError';
 import { slugify, slugifyWithSuffix } from '../utils/slugify';
 import { buildCursorArgs, buildCursorPage } from '../utils/pagination';
 import { CommunityMemberRole, CommunityMemberStatus } from '@prisma/client';
+import { POST_SELECT } from './posts.service';
+import { notificationsService } from './notifications.service';
 
 export const communitiesService = {
   async list(params: { cursor?: string; limit?: number; category?: string; search?: string; sort?: 'popular' | 'newest'; userId?: string }) {
@@ -89,6 +91,25 @@ export const communitiesService = {
 
     if (!community.isPrivate) {
       await prisma.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } });
+
+      // Notify community admins
+      const admins = await prisma.communityMember.findMany({
+        where: { communityId, role: CommunityMemberRole.ADMIN, status: CommunityMemberStatus.ACTIVE },
+        select: { userId: true },
+      });
+      const joiner = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
+      for (const admin of admins) {
+        if (admin.userId !== userId) {
+          await notificationsService.create({
+            recipientId: admin.userId,
+            type: 'COMMUNITY_JOIN',
+            actorId: userId,
+            entityId: communityId,
+            entityType: 'Community',
+            body: `${joiner?.displayName ?? 'Someone'} joined ${community.name}.`,
+          });
+        }
+      }
     }
 
     return { status };
@@ -176,7 +197,7 @@ export const communitiesService = {
     const posts = await prisma.post.findMany({
       ...args,
       where: { communityId, deletedAt: null, isDraft: false },
-      include: { author: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
+      select: POST_SELECT,
       orderBy: { createdAt: 'desc' },
     });
     return buildCursorPage(posts, limit);
@@ -223,6 +244,19 @@ export const communitiesService = {
       where: { communityId_recipientId: { communityId, recipientId } },
       create: { communityId, senderId, recipientId, expiresAt },
       update: { senderId, expiresAt, status: 'PENDING' },
+    });
+
+    const [community, sender] = await Promise.all([
+      prisma.community.findUnique({ where: { id: communityId }, select: { name: true } }),
+      prisma.user.findUnique({ where: { id: senderId }, select: { displayName: true } }),
+    ]);
+    await notificationsService.create({
+      recipientId,
+      type: 'COMMUNITY_INVITE',
+      actorId: senderId,
+      entityId: communityId,
+      entityType: 'Community',
+      body: `${sender?.displayName ?? 'Someone'} invited you to join ${community?.name ?? 'a community'}.`,
     });
   },
 

@@ -11,7 +11,7 @@ const StartConversationSchema = z.object({ participantId: z.string().cuid() });
 
 const SendMessageSchema = z.object({
   content: z.string().max(5000).optional(),
-  mediaUrl: z.string().url().optional(),
+  mediaUrl: z.string().min(1).optional(), // accepts both absolute URLs and relative proxy paths
   mediaType: z.enum(['IMAGE', 'VIDEO', 'AUDIO']).optional(),
 }).refine((d) => d.content ?? d.mediaUrl, { message: 'Either content or mediaUrl is required' });
 

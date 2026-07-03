@@ -3,9 +3,16 @@ import { apiClient, API_BASE_URL } from './client';
 import { User, ApiResponse } from '../types';
 import { useAuthStore } from '../store/authStore';
 
-const BASE = API_BASE_URL.replace('/api/v1', '');
-const toAbs = (url?: string) =>
-  url && url.startsWith('/') ? `${BASE}${url}` : url;
+const getBase = () => API_BASE_URL.replace('/api/v1', '');
+
+const toAbs = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith('/')) return `${getBase()}${url}`;
+  const s3Match = url.match(/https?:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(.+)/);
+  if (s3Match) return `${getBase()}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
+  if (url.includes('localhost')) return url.replace(/http:\/\/localhost(:\d+)?/, getBase());
+  return url;
+};
 
 export const userKeys = {
   all: ['users'] as const,
@@ -14,8 +21,10 @@ export const userKeys = {
 };
 
 export function useSuggestedUsersQuery(limit: number = 20) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return useQuery<User[]>({
     queryKey: userKeys.suggested(),
+    enabled: isAuthenticated,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<User[]>>(`/explore/suggested-users?limit=${limit}`);
       return (res.data.data ?? []).map((u: any) => ({
@@ -25,6 +34,7 @@ export function useSuggestedUsersQuery(limit: number = 20) {
         followersCount: u.followersCount ?? u._count?.followers ?? 0,
         bio: u.bio ?? '',
         role: u.role ?? undefined,
+        _count: undefined,
       }));
     },
   });
@@ -37,7 +47,13 @@ export function useSearchUsersQuery(query: string) {
     queryFn: async () => {
       if (!query) return [];
       const res = await apiClient.get<ApiResponse<User[]>>(`/search/users?q=${encodeURIComponent(query)}`);
-      return res.data.data;
+      return (res.data.data ?? []).map((u: any) => ({
+        ...u,
+        avatarUrl: toAbs(u.avatarUrl) ?? u.avatarUrl,
+        followersCount: u.followersCount ?? u._count?.followers ?? 0,
+        bio: u.bio ?? '',
+        role: u.role ?? undefined,
+      }));
     },
     enabled: query.length > 0 && isAuthenticated,
   });

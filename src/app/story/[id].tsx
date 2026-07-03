@@ -1,53 +1,109 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, Animated, Platform } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
+  Animated, Platform, ActivityIndicator,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { useTheme } from '../../theme';
+import { apiClient } from '../../api/client';
+import { useStoriesFeedQuery, useStoryByIdQuery, StoryGroup, Story } from '../../api/story';
 
-const { width, height } = Dimensions.get('window');
-
-// Mock data
 const STORY_DURATION = 5000;
-const STORIES = {
-  '1': { name: 'Gowda Sabha', avatarUrl: 'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=80', imageUrl: 'https://images.unsplash.com/photo-1542044896530-05d85be9b11a?w=800' },
-  '2': { name: 'Kodagu DC', avatarUrl: 'https://images.unsplash.com/photo-1466611653911-95081537e5b7?w=80', imageUrl: 'https://images.unsplash.com/photo-1506744626753-2fea95d1a9ce?w=800' },
-  '3': { name: 'Youth Club', avatarUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=80', imageUrl: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800' },
-  '4': { name: 'Farmers', avatarUrl: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=80', imageUrl: 'https://images.unsplash.com/photo-1592982537447-6f2963162796?w=800' },
-};
+
+function formatTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  if (h < 1) return `${Math.floor(diff / 60000)}m`;
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
 
 export default function ViewStoryScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const story = STORIES[id as keyof typeof STORIES] || STORIES['1'];
+  const { data: storyGroups = [], isLoading: feedLoading } = useStoriesFeedQuery();
+  const group: StoryGroup | undefined = storyGroups.find((g) =>
+    g.stories.some((s) => s.id === id)
+  );
+  const feedStory = group?.stories.find((s) => s.id === id);
+
+  // Fallback: fetch directly if not found in feed (e.g. direct URL navigation or own story)
+  const { data: directStory, isLoading: directLoading } = useStoryByIdQuery(
+    feedStory ? '' : (id ?? '')
+  );
+
+  const isLoading = feedLoading || (!feedStory && directLoading);
+
+  // Build stories array: use feed group if available, else wrap the single direct story
+  const stories: Story[] = group?.stories ?? (directStory ? [directStory] : []);
+  const initialIndex = stories.findIndex((s) => s.id === id);
+  const [index, setIndex] = useState(Math.max(0, initialIndex));
+  const story = stories[index];
+
+  // Sync index when stories resolve after initial render
+  useEffect(() => {
+    const idx = stories.findIndex((s) => s.id === id);
+    if (idx >= 0) setIndex(idx);
+  }, [stories.length]);
 
   const progress = useRef(new Animated.Value(0)).current;
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
-    // Start progress animation
+    if (!story) return;
     progress.setValue(0);
-    Animated.timing(progress, {
+    animRef.current = Animated.timing(progress, {
       toValue: 1,
       duration: STORY_DURATION,
       useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) {
-        router.back();
-      }
+    });
+    animRef.current.start(({ finished }) => {
+      if (finished) goNext();
     });
 
-    return () => progress.stopAnimation();
-  }, [id, router, progress]);
+    // Record view
+    apiClient.post(`/stories/${story.id}/view`).catch(() => {});
 
-  const handlePressLeft = () => {
-    // In a real app, go to previous story
-    router.back();
+    return () => animRef.current?.stop();
+  }, [story?.id]);
+
+  const goNext = () => {
+    if (index < stories.length - 1) {
+      setIndex((i) => i + 1);
+    } else {
+      router.back();
+    }
   };
 
-  const handlePressRight = () => {
-    // In a real app, go to next story or finish
-    router.back();
+  const goPrev = () => {
+    if (index > 0) {
+      setIndex((i) => i - 1);
+    } else {
+      router.back();
+    }
   };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator style={{ flex: 1 }} color="#FFF" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!story) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#FFF', fontSize: 16 }}>Story not found or expired.</Text>
+          <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
+            <Text style={{ color: '#FFF', fontWeight: '700' }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const progressBarWidth = progress.interpolate({
     inputRange: [0, 1],
@@ -57,152 +113,144 @@ export default function ViewStoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.storyContainer}>
-        {/* Background Image */}
-        <Image
-          source={{ uri: story.imageUrl }}
-          style={styles.backgroundImage}
-          contentFit="cover"
-        />
+        {/* Media */}
+        {story.mediaType === 'VIDEO' ? (
+          Platform.OS === 'web' ? (
+            // @ts-ignore
+            <video
+              key={story.id}
+              src={story.mediaUrl}
+              autoPlay
+              playsInline
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' } as any}
+              onEnded={goNext}
+            />
+          ) : (
+            <NativeStoryVideo uri={story.mediaUrl} onEnd={goNext} />
+          )
+        ) : (
+          <Image
+            source={{ uri: story.mediaUrl }}
+            style={styles.backgroundImage}
+            contentFit="contain"
+          />
+        )}
 
-        {/* Gradient overlay for header */}
         <View style={styles.gradientTop} />
 
-        {/* Header (Progress Bar & User Info) */}
+        {/* Header */}
         <View style={styles.header}>
-          {/* Progress Bar Container */}
+          {/* Progress bars */}
           <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBg}>
-              <Animated.View style={[styles.progressBarFill, { width: progressBarWidth }]} />
-            </View>
+            {stories.map((s, i) => (
+              <View key={s.id} style={styles.progressBarBg}>
+                <Animated.View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: i < index ? '100%' : i === index ? progressBarWidth : '0%',
+                    },
+                  ]}
+                />
+              </View>
+            ))}
           </View>
 
-          {/* User Info Row */}
+          {/* User info */}
           <View style={styles.userInfoRow}>
             <View style={styles.userInfoLeft}>
-              <Image source={{ uri: story.avatarUrl }} style={styles.avatar} contentFit="cover" />
-              <Text style={styles.userName}>{story.name}</Text>
-              <Text style={styles.timeText}>2h</Text>
+              {(group?.user.avatarUrl ?? story.author?.avatarUrl) ? (
+                <Image source={{ uri: group?.user.avatarUrl ?? story.author?.avatarUrl }} style={styles.avatar} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: '#333' }]} />
+              )}
+              <Text style={styles.userName}>{group?.user.displayName ?? story.author?.displayName ?? ''}</Text>
+              <Text style={styles.timeText}>{formatTime(story.createdAt)}</Text>
             </View>
-            <View style={styles.userInfoRight}>
-              <TouchableOpacity style={styles.iconBtn}>
-                <Ionicons name="ellipsis-horizontal" size={20} color="#FFF" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-                <Ionicons name="close" size={28} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+              <Ionicons name="close" size={28} color="#FFF" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Touch Navigation Zones */}
+        {/* Touch zones */}
         <View style={styles.touchZones}>
-          <TouchableOpacity 
-            style={styles.touchLeft} 
-            activeOpacity={1} 
-            onPress={handlePressLeft} 
-          />
-          <TouchableOpacity 
-            style={styles.touchRight} 
-            activeOpacity={1} 
-            onPress={handlePressRight} 
-          />
+          <TouchableOpacity style={styles.touchLeft} activeOpacity={1} onPress={goPrev} />
+          <TouchableOpacity style={styles.touchRight} activeOpacity={1} onPress={goNext} />
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
+function NativeStoryVideo({ uri, onEnd }: { uri: string; onEnd: () => void }) {
+  const [VideoView, setVideoView] = useState<any>(null);
+  const [player, setPlayer] = useState<any>(null);
+
+  useEffect(() => {
+    import('expo-video').then((mod) => {
+      setVideoView(() => mod.VideoView);
+      if (mod.createVideoPlayer) {
+        const p = mod.createVideoPlayer(uri);
+        p.loop = false;
+        p.play();
+        setPlayer(p);
+      }
+    }).catch(() => {});
+    return () => { player?.release?.(); };
+  }, [uri]);
+
+  if (!VideoView || !player) {
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]} />;
+  }
+
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFill}
+      contentFit="contain"
+      nativeControls={false}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
   storyContainer: {
     flex: 1,
     borderRadius: Platform.OS === 'ios' ? 12 : 0,
     overflow: 'hidden',
     position: 'relative',
   },
-  backgroundImage: {
-    ...StyleSheet.absoluteFill,
-  },
+  backgroundImage: { ...StyleSheet.absoluteFillObject },
   gradientTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 120,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    position: 'absolute', top: 0, left: 0, right: 0, height: 120,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   header: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 10 : 20,
-    left: 0,
-    right: 0,
+    left: 0, right: 0,
     paddingHorizontal: 10,
     zIndex: 10,
   },
-  progressBarContainer: {
-    flexDirection: 'row',
-    gap: 4,
-    marginBottom: 12,
-  },
+  progressBarContainer: { flexDirection: 'row', gap: 4, marginBottom: 12 },
   progressBarBg: {
-    flex: 1,
-    height: 2,
+    flex: 1, height: 2,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 1,
-    overflow: 'hidden',
+    borderRadius: 1, overflow: 'hidden',
   },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#FFF',
-  },
+  progressBarFill: { height: '100%', backgroundColor: '#FFF' },
   userInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingHorizontal: 4,
   },
-  userInfoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#FFF',
-  },
-  userName: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  timeText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  userInfoRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconBtn: {
-    padding: 4,
-  },
-  touchZones: {
-    ...StyleSheet.absoluteFill,
-    flexDirection: 'row',
-    zIndex: 5,
-  },
-  touchLeft: {
-    flex: 0.3, // Left 30% goes back
-  },
-  touchRight: {
-    flex: 0.7, // Right 70% goes forward
-  },
+  userInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#FFF' },
+  userName: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  timeText: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
+  iconBtn: { padding: 4 },
+  touchZones: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', zIndex: 5 },
+  touchLeft: { flex: 0.3 },
+  touchRight: { flex: 0.7 },
 });

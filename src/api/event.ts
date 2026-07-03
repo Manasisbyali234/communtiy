@@ -1,8 +1,23 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { apiClient } from './client';
+import { apiClient, API_BASE_URL } from './client';
 import { Event, ApiResponse, PaginatedResponse } from '../types';
 import { useEventStore } from '../store/eventStore';
+
+const getBase = () => API_BASE_URL.replace('/api/v1', '');
+const toAbs = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith('/')) return `${getBase()}${url}`;
+  const s3Match = url.match(/https?:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(.+)/);
+  if (s3Match) return `${getBase()}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
+  if (url.includes('localhost')) return url.replace(/http:\/\/localhost(:\d+)?/, getBase());
+  return url;
+};
+
+const normalizeEvent = (e: any): Event => ({
+  ...e,
+  coverUrl: toAbs(e.coverUrl),
+});
 
 export const eventKeys = {
   all: ['events'] as const,
@@ -21,7 +36,7 @@ export function useEventsQuery() {
       try {
         const res = await apiClient.get<ApiResponse<PaginatedResponse<Event>>>('/events');
         const data = res.data.data.data;
-        return data ?? [];
+        return (data ?? []).map(normalizeEvent);
       } catch {
         return [];
       }
@@ -60,7 +75,7 @@ export function useCreateEventMutation() {
       coverUrl?: string;
     }) => {
       const res = await apiClient.post<ApiResponse<Event>>('/events', payload);
-      return res.data.data;
+      return normalizeEvent(res.data.data);
     },
     onSuccess: (newEvent) => {
       addLocalEvent(newEvent);

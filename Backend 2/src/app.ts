@@ -32,9 +32,10 @@ export function buildApp(): Application {
       },
     }),
   );
+  const corsOrigins = config.CORS_ORIGINS.trim();
   app.use(
     cors({
-      origin: config.CORS_ORIGINS.split(',').map((o) => o.trim()),
+      origin: corsOrigins === '*' ? true : corsOrigins.split(',').map((o) => o.trim()),
       credentials: true,
     }),
   );

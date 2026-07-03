@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions, Platform,
@@ -10,6 +10,7 @@ import {
   StyleSheet, Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from '../../components/feed/PostCard';
@@ -21,6 +22,9 @@ import { useUserPostsQuery } from '../../api/feed';
 import { useNotificationsQuery } from '../../api/chat';
 import { useAuthStore } from '../../store/authStore';
 import { useEventsQuery } from '../../api/event';
+import { apiClient } from '../../api/client';
+import { useUnreadCountQuery } from '../../api/chat';
+import { useMyConnectionCountQuery, useConnectionSocket } from '../../api/connections';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -150,13 +154,28 @@ export default function ProfileScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: SW } = useWindowDimensions();
+  const COVER_HEIGHT = Math.round(SW * 0.48);
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
   const [bioExpanded, setBioExpanded] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  const { user } = useAuthStore();
+  const { user, updateProfile } = useAuthStore();
   const { data: posts = [], isLoading: postsLoading } = useUserPostsQuery(user?.id || '');
+  const { data: unreadCount = 0 } = useUnreadCountQuery();
+  const { data: connectionCount } = useMyConnectionCountQuery(user?.id || '');
+  useConnectionSocket(user?.id);
+
+  // Sync latest profile data from the server on every mount so images
+  // are always up-to-date after an edit or a page refresh.
+  useEffect(() => {
+    apiClient.get('/users/me').then((res) => {
+      const fresh = res.data?.data ?? res.data;
+      if (fresh) updateProfile(fresh);
+    }).catch(() => {});
+  }, []);
+
   const { data: allEvents = [] } = useEventsQuery();
   const myEvents = allEvents.filter(
     (e: any) => e.creatorId === user?.id || e.creatorId === 'local'
@@ -281,6 +300,16 @@ export default function ProfileScreen() {
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: TEXT }]}>{user?.displayName || 'Profile'}</Text>
         <View style={styles.navRight}>
+          <TouchableOpacity style={styles.navIconBtn} onPress={() => router.push('/notifications' as any)}>
+            <View>
+              <Ionicons name="notifications-outline" size={22} color={TEXT} />
+              {unreadCount > 0 && (
+                <View style={[styles.bellBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.navIconBtn} onPress={handleShare}>
             <Ionicons name="share-social-outline" size={22} color={TEXT} />
           </TouchableOpacity>
@@ -302,7 +331,7 @@ export default function ProfileScreen() {
 
         {/* ── Cover Photo ─────────────────────────────────────────────── */}
         <View style={styles.coverContainer}>
-          <Image source={{ uri: user?.bannerUrl || 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&auto=format&fit=crop&q=80' }} style={styles.coverImage} contentFit="cover" />
+          <Image source={{ uri: user?.coverImage || user?.bannerUrl || 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&auto=format&fit=crop&q=80' }} style={styles.coverImage} contentFit="cover" />
           {/* Gradient overlay */}
           <View style={styles.coverGradient} />
         </View>
@@ -354,9 +383,8 @@ export default function ProfileScreen() {
         {/* ── Compact Stats Row ────────────────────────────────────── */}
         <View style={[styles.statsRow, { backgroundColor: SURF, borderColor: BORDER }]}>
           {[
-            { label: 'Followers', value: (user?.followersCount || 0).toString() },
+            { label: 'Connections', value: (connectionCount ?? user?.followersCount ?? 0).toString() },
             { label: 'Following', value: (user?.followingCount || 0).toString() },
-            { label: 'Communities', value: (user?.communitiesCount || 0).toString() },
             { label: 'Since', value: (user?.joinedAt || user?.createdAt) ? new Date(user.joinedAt || user.createdAt!).getFullYear().toString() : new Date().getFullYear().toString() },
           ].map((stat, i, arr) => (
             <React.Fragment key={stat.label}>
@@ -575,6 +603,13 @@ const styles = StyleSheet.create({
   navTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700' },
   navRight: { flexDirection: 'row' },
   navIconBtn: { padding: 8 },
+  bellBadge: {
+    position: 'absolute', top: -2, right: -2,
+    minWidth: 16, height: 16, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: { color: '#FFF', fontSize: 9, fontWeight: '800' },
 
   // ── Cover Photo ─────────────────────────────────────────────────────────────
   coverContainer: { position: 'relative', height: COVER_HEIGHT },

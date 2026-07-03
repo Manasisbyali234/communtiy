@@ -11,6 +11,7 @@ const UpdateMeSchema = z.object({
   bio: z.string().max(500).optional(),
   avatarUrl: z.string().url().optional(),
   bannerUrl: z.string().url().optional(),
+  coverImage: z.string().url().nullable().optional(),
   village: z.string().max(50).optional(),
   occupation: z.string().max(50).optional(),
   languages: z.string().max(100).optional(),

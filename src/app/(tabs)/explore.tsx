@@ -17,8 +17,10 @@ import { useToastStore } from '../../store/toastStore';
 import PostCard from '../../components/feed/PostCard';
 import CommentSheet from '../../components/feed/CommentSheet';
 import Skeleton from '../../components/feedback/Skeleton';
-import { useSuggestedUsersQuery } from '../../api/user';
+import { useSuggestedUsersQuery, useSearchUsersQuery } from '../../api/user';
 import { useEventsQuery } from '../../api/event';
+import { useSendConnectionRequestMutation, useConnectionStatusQuery, ConnectionStatus } from '../../api/connections';
+import { useAuthStore } from '../../store/authStore';
 
 const { width: SW } = Dimensions.get('window');
 const COMM_BANNER_H = Math.round(SW * 0.28);
@@ -83,12 +85,48 @@ function EventSkeleton() {
   );
 }
 
+// ── Connect Button (per-member, own hook scope) ───────────────────────────────
+function ConnectButton({ item, currentUserId }: { item: any; currentUserId?: string }) {
+  const { colors } = useTheme();
+  const showToast = useToastStore((s) => s.showToast);
+  const G = colors.primary;
+  const { data: status = 'NONE', isLoading: statusLoading } = useConnectionStatusQuery(item.id, currentUserId);
+  const sendRequest = useSendConnectionRequestMutation();
+
+  const handleConnect = () => {
+    if (status !== 'NONE') return;
+    sendRequest.mutate(item.id, {
+      onSuccess: () => showToast(`Request sent to ${item.displayName || item.username}`, 'success'),
+      onError: (e: any) => showToast(e?.response?.data?.message || 'Failed to send request', 'error'),
+    });
+  };
+
+  const iconName = status === 'ACCEPTED' ? 'checkmark-circle' : status === 'PENDING_SENT' ? 'time-outline' : 'person-add-outline';
+  const bgColor = status === 'ACCEPTED' ? colors.primaryContainer : status === 'PENDING_SENT' ? colors.elevation1 : colors.primaryContainer;
+  const iconColor = status === 'PENDING_SENT' ? colors.textMuted : G;
+
+  return (
+    <TouchableOpacity
+      style={[styles.msgBtn, { backgroundColor: bgColor }]}
+      onPress={handleConnect}
+      disabled={status !== 'NONE' || sendRequest.isPending || statusLoading}
+    >
+      {sendRequest.isPending ? (
+        <ActivityIndicator size={14} color={G} />
+      ) : (
+        <Ionicons name={iconName as any} size={16} color={iconColor} />
+      )}
+    </TouchableOpacity>
+  );
+}
+
 export default function ExploreScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string }>();
   const showToast = useToastStore((s) => s.showToast);
+  const currentUser = useAuthStore((s) => s.user);
 
   const [activeTab, setActiveTab] = useState<ExploreTab>(() => {
     // On web, read directly from URL as the most reliable source
@@ -126,7 +164,10 @@ export default function ExploreScreen() {
   const { data: communities = [], isLoading: commsLoading, refetch: refetchComms } = useCommunitiesQuery();
   const joinMutation = useJoinCommunityMutation();
   
-  const { data: members = [], isLoading: membersLoading, refetch: refetchMembers } = useSuggestedUsersQuery();
+  const { data: suggestedMembers = [], isLoading: suggestedLoading, refetch: refetchMembers } = useSuggestedUsersQuery();
+  const { data: searchedMembers = [], isLoading: searchLoading } = useSearchUsersQuery(debouncedSearch);
+  const members = debouncedSearch ? searchedMembers : suggestedMembers;
+  const membersLoading = debouncedSearch ? searchLoading : suggestedLoading;
   const { data: events = [], isLoading: eventsLoading, refetch: refetchEvents } = useEventsQuery();
 
   const handleRefresh = async () => {
@@ -168,14 +209,7 @@ export default function ExploreScreen() {
   };
 
   // ── Filtered data ──────────────────────────────────────────────────────────
-  const filteredMembers = members.filter((m: any) => {
-    if (!debouncedSearch) return true;
-    const q = debouncedSearch.toLowerCase();
-    return (
-      m.displayName?.toLowerCase().includes(q) ||
-      m.username?.toLowerCase().includes(q)
-    );
-  });
+  const filteredMembers = members;
 
   const filteredCommunities = communities.filter((c: any) => {
     const typeMatch = selectedCommType === 'All' ||
@@ -311,12 +345,7 @@ export default function ExploreScreen() {
       </View>
 
       <View style={styles.memberActions}>
-        <TouchableOpacity 
-          style={[styles.msgBtn, { backgroundColor: colors.primaryContainer }]}
-          onPress={() => showToast(`Connection request sent to ${item.displayName || item.username}`, 'success')}
-        >
-          <Ionicons name="person-add-outline" size={16} color={G} />
-        </TouchableOpacity>
+        <ConnectButton item={item} currentUserId={currentUser?.id} />
         <TouchableOpacity 
           style={[styles.msgBtn, { backgroundColor: colors.elevation1 }]}
           onPress={() => router.push(`/chat/${item.username}` as any)}

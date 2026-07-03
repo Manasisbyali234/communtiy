@@ -3,9 +3,19 @@ import { apiClient, API_BASE_URL } from './client';
 import { Post, Comment, User, PaginatedResponse, ApiResponse } from '../types';
 import { useAuthStore } from '../store/authStore';
 
-const BASE = API_BASE_URL.replace('/api/v1', '');
-const toAbs = (url?: string) =>
-  url && url.startsWith('/') ? `${BASE}${url}` : url;
+const getBase = () => API_BASE_URL.replace('/api/v1', '');
+
+const toAbs = (url?: string): string | undefined => {
+  if (!url) return undefined;
+  // Relative path → prepend backend base
+  if (url.startsWith('/')) return `${getBase()}${url}`;
+  // S3 direct URL → rewrite through backend media proxy
+  const s3Match = url.match(/https?:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(.+)/);
+  if (s3Match) return `${getBase()}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
+  // localhost URL → rewrite to current dynamic host
+  if (url.includes('localhost')) return url.replace(/http:\/\/localhost(:\d+)?/, getBase());
+  return url;
+};
 
 export const feedKeys = {
   all: ['feed'] as const,
@@ -68,13 +78,14 @@ export function usePostsQuery() {
   return useQuery<Post[]>({
     queryKey: feedKeys.posts(),
     enabled: isAuthenticated,
+    staleTime: 60_000,
     queryFn: async () => {
       const [feedRes, trendingRes] = await Promise.all([
         apiClient.get<ApiResponse<PaginatedResponse<Post>>>('/posts/feed'),
         apiClient.get<ApiResponse<PaginatedResponse<Post>>>('/posts/trending'),
       ]);
-      const posts: any[] = feedRes.data.data.data ?? [];
-      if (posts.length > 0) return posts.map(normalizePost);
+      const feedPosts: any[] = feedRes.data.data.data ?? [];
+      if (feedPosts.length > 0) return feedPosts.map(normalizePost);
       return (trendingRes.data.data.data ?? []).map(normalizePost);
     },
   });
@@ -225,8 +236,36 @@ export function useAddCommentMutation() {
       const res = await apiClient.post<ApiResponse<Comment>>(`/posts/${postId}/comments`, { content });
       return res.data.data;
     },
+    onMutate: async ({ postId, content }) => {
+      await queryClient.cancelQueries({ queryKey: feedKeys.comments(postId) });
+      const prevComments = queryClient.getQueryData<Comment[]>(feedKeys.comments(postId));
+      const { user } = useAuthStore.getState();
+      const optimistic: Comment = {
+        id: `temp-${Date.now()}`,
+        postId,
+        authorId: user?.id ?? '',
+        author: user as User,
+        content,
+        likesCount: 0,
+        isLiked: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData<Comment[]>(feedKeys.comments(postId), (old = []) => [optimistic, ...old]);
+      // Optimistically bump commentsCount on the post
+      queryClient.setQueryData<Post[]>(feedKeys.posts(), (old) =>
+        old?.map((p) => p.id === postId ? { ...p, commentsCount: p.commentsCount + 1 } : p)
+      );
+      return { prevComments };
+    },
+    onError: (_err, { postId }, ctx: any) => {
+      if (ctx?.prevComments) queryClient.setQueryData(feedKeys.comments(postId), ctx.prevComments);
+    },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: feedKeys.comments(data.postId) });
+      // Replace optimistic entry with real server data
+      queryClient.setQueryData<Comment[]>(feedKeys.comments(data.postId), (old = []) =>
+        old.map((c) => c.id.startsWith('temp-') ? data : c)
+      );
       queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
       queryClient.invalidateQueries({ queryKey: feedKeys.post(data.postId) });
     },

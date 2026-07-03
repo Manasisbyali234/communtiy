@@ -20,7 +20,7 @@ import Avatar from '../../components/common/Avatar';
 import { Ionicons } from '@expo/vector-icons';
 import { useToastStore } from '../../store/toastStore';
 import { useAuthStore } from '../../store/authStore';
-import { pickAndSaveImage } from '../../utils/imagePicker';
+import { pickImage, uploadPostImage } from '../../utils/imagePicker';
 
 export default function CreatePost() {
   const { colors, typography } = useTheme();
@@ -63,8 +63,10 @@ export default function CreatePost() {
   };
 
   const handleAttachMockImage = async () => {
-    const uri = await pickAndSaveImage();
-    if (uri) setMediaUrl(uri);
+    const picked = await pickImage();
+    if (!picked) return;
+    const url = await uploadPostImage(picked);
+    if (url) setMediaUrl(url);
   };
 
   const handlePostSubmit = () => {

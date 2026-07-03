@@ -8,7 +8,7 @@ export const usersService = {
       where: { id: userId },
       select: {
         id: true, email: true, username: true, displayName: true, bio: true,
-        avatarUrl: true, bannerUrl: true, village: true, occupation: true, languages: true, interests: true, role: true, isVerified: true, createdAt: true,
+        avatarUrl: true, bannerUrl: true, coverImage: true, village: true, occupation: true, languages: true, interests: true, role: true, isVerified: true, createdAt: true,
         _count: { select: { followers: true, following: true, posts: true } },
       },
     });
@@ -20,11 +20,11 @@ export const usersService = {
     };
   },
 
-  async updateMe(userId: string, data: { displayName?: string; bio?: string; avatarUrl?: string; bannerUrl?: string; village?: string; occupation?: string; languages?: string; interests?: string }) {
+  async updateMe(userId: string, data: { displayName?: string; bio?: string; avatarUrl?: string; bannerUrl?: string; coverImage?: string | null; village?: string; occupation?: string; languages?: string; interests?: string }) {
     return prisma.user.update({
       where: { id: userId },
       data,
-      select: { id: true, username: true, displayName: true, bio: true, avatarUrl: true, bannerUrl: true, village: true, occupation: true, languages: true, interests: true },
+      select: { id: true, username: true, displayName: true, bio: true, avatarUrl: true, bannerUrl: true, coverImage: true, village: true, occupation: true, languages: true, interests: true },
     });
   },
 
@@ -67,12 +67,14 @@ export const usersService = {
       update: {},
     });
 
+    const follower = await prisma.user.findUnique({ where: { id: followerId }, select: { displayName: true } });
     await notificationsService.create({
       recipientId: followingId,
-      type: 'NEW_FOLLOWER',
+      type: 'FOLLOW',
       actorId: followerId,
       entityId: followerId,
       entityType: 'User',
+      body: `${follower?.displayName ?? 'Someone'} started following you.`,
     });
   },
 
@@ -116,6 +118,10 @@ export const usersService = {
   },
 
   async updatePushToken(userId: string, expoPushToken: string) {
-    await prisma.user.update({ where: { id: userId }, data: { expoPushToken } });
+    await prisma.deviceToken.upsert({
+      where: { token: expoPushToken },
+      create: { userId, token: expoPushToken, platform: 'android' },
+      update: { userId },
+    });
   },
 };

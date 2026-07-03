@@ -5,6 +5,7 @@ export interface User {
   displayName: string;
   avatarUrl?: string;
   bannerUrl?: string;
+  coverImage?: string;
   bio?: string;
   role?: 'USER' | 'MODERATOR' | 'ADMIN';
   isVerified?: boolean;
@@ -125,7 +126,7 @@ export interface Event {
 export interface Notification {
   id: string;
   recipientId: string;
-  type: 'LIKE' | 'COMMENT' | 'FOLLOW' | 'COMMUNITY_JOIN' | 'EVENT_REMINDER' | 'MENTION' | 'MESSAGE';
+  type: 'LIKE' | 'COMMENT' | 'FOLLOW' | 'COMMUNITY_JOIN' | 'EVENT_REMINDER' | 'MENTION' | 'MESSAGE' | 'CONNECTION_REQUEST' | 'CONNECTION_ACCEPTED';
   actorId?: string;
   entityId?: string;
   entityType?: string;

@@ -4,7 +4,7 @@ import { ApiError } from '../utils/ApiError';
 import { blocksService } from './blocks.service';
 import { getQueue, QUEUE_NAMES } from '../config/bullmq';
 import { notificationsService } from './notifications.service';
-const POST_SELECT = {
+export const POST_SELECT = {
   id: true, content: true, mediaUrls: true, mediaType: true,
   likesCount: true, commentsCount: true, sharesCount: true,
   isDraft: true, scheduledAt: true,
@@ -207,12 +207,14 @@ export const postsService = {
     ]);
 
     if (post.authorId !== userId) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
       await notificationsService.create({
         recipientId: post.authorId,
-        type: 'NEW_LIKE',
+        type: 'LIKE',
         actorId: userId,
         entityId: postId,
         entityType: 'Post',
+        body: `${actor?.displayName ?? 'Someone'} liked your post.`,
       });
     }
   },

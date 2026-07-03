@@ -21,6 +21,43 @@ export const mediaController = {
     res.json(new ApiResponse(200, result, 'Event image uploaded successfully'));
   }),
 
+  uploadProfilePhoto: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) throw ApiError.badRequest('No file provided');
+    const result = await mediaService.uploadProfilePhoto(
+      { buffer: req.file.buffer, originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size },
+      req.user.id
+    );
+    res.json(new ApiResponse(200, result, 'Profile photo uploaded successfully'));
+  }),
+
+  uploadCoverPhoto: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) throw ApiError.badRequest('No file provided');
+    const result = await mediaService.uploadCoverPhoto(
+      { buffer: req.file.buffer, originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size },
+      req.user.id
+    );
+    res.json(new ApiResponse(200, result, 'Cover photo uploaded successfully'));
+  }),
+
+  uploadPostImage: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) throw ApiError.badRequest('No file provided');
+    const result = await mediaService.uploadPostImage(
+      { buffer: req.file.buffer, originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size },
+      req.user.id
+    );
+    res.json(new ApiResponse(200, result, 'Post image uploaded successfully'));
+  }),
+
+  uploadChatFile: asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) throw ApiError.badRequest('No file provided');
+    const result = await mediaService.uploadChatFile(
+      { buffer: req.file.buffer, originalname: req.file.originalname, mimetype: req.file.mimetype, size: req.file.size },
+      req.user.id
+    );
+    console.log('[upload-chat] result:', JSON.stringify(result));
+    res.json(new ApiResponse(200, result, 'Chat file uploaded successfully'));
+  }),
+
   upload: asyncHandler(async (req: Request, res: Response) => {
     console.log('[upload] request received', req.method, req.url);
     console.log('[upload] headers', JSON.stringify(req.headers));

@@ -3,6 +3,7 @@ import { redis } from '../config/redis';
 import { getQueue, QUEUE_NAMES } from '../config/bullmq';
 import { ApiError } from '../utils/ApiError';
 import { MediaType } from '@prisma/client';
+import { notificationsService } from './notifications.service';
 
 const STORY_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
@@ -36,6 +37,18 @@ export const storiesService = {
     }
 
     return Array.from(grouped.values());
+  },
+
+  async getById(storyId: string) {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      include: {
+        author: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+      },
+    });
+    if (!story) throw ApiError.notFound('Story not found');
+    if (story.expiresAt < new Date()) throw ApiError.notFound('Story has expired');
+    return story;
   },
 
   async create(authorId: string, mediaUrl: string, mediaType: MediaType) {
@@ -104,6 +117,18 @@ export const storiesService = {
       prisma.like.create({ data: { userId, storyId } }),
       prisma.story.update({ where: { id: storyId }, data: { likesCount: { increment: 1 } } }),
     ]);
+
+    if (story.authorId !== userId) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
+      await notificationsService.create({
+        recipientId: story.authorId,
+        type: 'STORY_LIKE',
+        actorId: userId,
+        entityId: storyId,
+        entityType: 'Story',
+        body: `${actor?.displayName ?? 'Someone'} liked your story.`,
+      });
+    }
   },
 
   async unlikeStory(storyId: string, userId: string) {
@@ -122,10 +147,23 @@ export const storiesService = {
     if (!story) throw ApiError.notFound('Story not found');
     if (story.expiresAt < new Date()) throw ApiError.notFound('Story has expired');
 
-    return prisma.storyReply.create({
+    const reply = await prisma.storyReply.create({
       data: { storyId, senderId, content },
       include: { sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
     });
+
+    if (story.authorId !== senderId) {
+      await notificationsService.create({
+        recipientId: story.authorId,
+        type: 'STORY_REPLY',
+        actorId: senderId,
+        entityId: storyId,
+        entityType: 'Story',
+        body: `${reply.sender.displayName} replied to your story.`,
+      });
+    }
+
+    return reply;
   },
 
   async getStoryReplies(storyId: string, userId: string) {

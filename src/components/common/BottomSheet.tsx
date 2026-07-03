@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
@@ -9,12 +9,6 @@ import {
   Dimensions,
   Modal,
 } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 import { useTheme } from '../../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,31 +33,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   const { colors, spacing, roundness, typography } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const translateY = useSharedValue(height);
-  const backdropOpacity = useSharedValue(0);
-
-  useEffect(() => {
-    if (visible) {
-      translateY.value = withSpring(0, { damping: 20, stiffness: 100 });
-      backdropOpacity.value = withTiming(0.5, { duration: 300 });
-    } else {
-      translateY.value = withTiming(height, { duration: 250 });
-      backdropOpacity.value = withTiming(0, { duration: 200 });
-    }
-  }, [visible, height]);
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  const backdropAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
-
   const handleClose = () => {
-    translateY.value = withTiming(height, { duration: 200 });
-    backdropOpacity.value = withTiming(0, { duration: 150 });
-    setTimeout(onClose, 200);
+    onClose();
   };
 
   if (!visible) return null;
@@ -78,8 +49,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     >
       <View style={styles.container}>
         {/* Backdrop — sits behind sheet */}
-        <Animated.View
-          style={[styles.backdrop, backdropAnimatedStyle, { backgroundColor: '#000000' }]}
+        <View
+          style={[styles.backdrop, { backgroundColor: '#000000', opacity: 0.5 }]}
           pointerEvents="none"
         />
         <Pressable style={styles.backdropPressable} onPress={handleClose} />
@@ -89,10 +60,9 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
         >
-          <Animated.View
+          <View
             style={[
               styles.sheet,
-              sheetAnimatedStyle,
               {
                 backgroundColor: colors.cardBg,
                 height,
@@ -135,7 +105,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
             {/* Body */}
             <View style={styles.body}>{children}</View>
-          </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </View>
     </Modal>

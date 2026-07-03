@@ -63,7 +63,11 @@ export const exploreService = {
         where: { id: { not: userId }, isActive: true, deletedAt: null },
         orderBy: { followers: { _count: 'desc' } },
         take: limit,
-        select: { id: true, username: true, displayName: true, avatarUrl: true, isVerified: true },
+        select: {
+          id: true, username: true, displayName: true, avatarUrl: true,
+          isVerified: true, bio: true, role: true,
+          _count: { select: { followers: true } },
+        },
       });
     }
 
@@ -80,7 +84,11 @@ export const exploreService = {
     return prisma.user.findMany({
       where: { id: { in: candidateIds }, isActive: true, deletedAt: null },
       take: limit,
-      select: { id: true, username: true, displayName: true, avatarUrl: true, isVerified: true },
+      select: {
+        id: true, username: true, displayName: true, avatarUrl: true,
+        isVerified: true, bio: true, role: true,
+        _count: { select: { followers: true } },
+      },
     });
   },
 

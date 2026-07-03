@@ -4,19 +4,19 @@ import { Community, User, PaginatedResponse, ApiResponse } from '../types';
 import { feedKeys } from './feed';
 import { useAuthStore } from '../store/authStore';
 
+const getSocketUrl = () => SOCKET_URL;
+
 const toAbsoluteUrl = (url?: string) => {
   if (!url) return '';
-  // Already a proxy/backend URL
+  const base = getSocketUrl();
   if (url.startsWith('http://') || url.startsWith('https://')) {
-    // Rewrite direct S3 URLs to go through our backend proxy
     const s3Match = url.match(/https?:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(.+)/);
     if (s3Match) {
-      return `${SOCKET_URL}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
+      return `${base}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
     }
-    // Rewrite localhost URLs so physical devices can reach the server
-    return url.replace(/http:\/\/localhost(:\d+)?/, SOCKET_URL.replace(/\/+$/, ''));
+    return url.replace(/http:\/\/localhost(:\d+)?/, base.replace(/\/+$/, ''));
   }
-  if (url.startsWith('/')) return `${SOCKET_URL}${url}`;
+  if (url.startsWith('/')) return `${base}${url}`;
   return url;
 };
 

@@ -45,6 +45,33 @@ export async function uploadImage(picked: PickedImage): Promise<string | null> {
   return url;
 }
 
+async function _uploadToEndpoint(picked: PickedImage, endpoint: string): Promise<string | null> {
+  const formData = new FormData();
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(picked.localUri);
+    const blob = await response.blob();
+    formData.append('file', new File([blob], picked.filename, { type: picked.mimeType }));
+  } else {
+    formData.append('file', { uri: picked.localUri, name: picked.filename, type: picked.mimeType } as any);
+  }
+
+  const res = await apiClient.post(endpoint, formData);
+  return res.data?.data?.url ?? res.data?.url ?? null;
+}
+
+export async function uploadProfilePhoto(picked: PickedImage): Promise<string | null> {
+  return _uploadToEndpoint(picked, '/media/upload-profile-photo');
+}
+
+export async function uploadCoverPhoto(picked: PickedImage): Promise<string | null> {
+  return _uploadToEndpoint(picked, '/media/upload-cover-photo');
+}
+
+export async function uploadPostImage(picked: PickedImage): Promise<string | null> {
+  return _uploadToEndpoint(picked, '/media/upload-post-image');
+}
+
 /** @deprecated use pickImage + uploadImage separately */
 export async function pickAndSaveImage(): Promise<string | null> {
   const picked = await pickImage();

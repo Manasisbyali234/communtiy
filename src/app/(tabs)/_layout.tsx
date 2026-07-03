@@ -4,6 +4,8 @@ import { useTheme } from '../../theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import BottomSheet from '../../components/common/BottomSheet';
+import { useUnreadCountQuery } from '../../api/chat';
+import { useAuthStore } from '../../store/authStore';
 
 // M3 FAB tab button for the center "Create" tab
 function CreatePostTabIcon({ focused, color }: { focused: boolean; color: string }) {
@@ -27,13 +29,12 @@ export default function TabsLayout() {
   const { colors, typography } = useTheme();
   const router = useRouter();
   const [createMenuVisible, setCreateMenuVisible] = useState(false);
+  const { data: unreadCount = 0 } = useUnreadCountQuery();
+  const user = useAuthStore((s) => s.user);
 
   const handleCreateOptionPress = (route: string) => {
     setCreateMenuVisible(false);
-    // Use timeout to allow the bottom sheet to close smoothly before navigating
-    setTimeout(() => {
-      router.push(route as any);
-    }, 250);
+    router.push(route as any);
   };
 
   return (

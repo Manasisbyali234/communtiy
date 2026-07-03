@@ -19,7 +19,11 @@ function multerErrorHandler(err: any, _req: Request, _res: Response, next: NextF
   next(err);
 }
 
+router.post('/upload-chat', uploadMiddleware, multerErrorHandler, mediaController.uploadChatFile);
 router.post('/upload-event', uploadMiddleware, multerErrorHandler, mediaController.uploadEventImage);
+router.post('/upload-profile-photo', uploadMiddleware, multerErrorHandler, mediaController.uploadProfilePhoto);
+router.post('/upload-cover-photo', uploadMiddleware, multerErrorHandler, mediaController.uploadCoverPhoto);
+router.post('/upload-post-image', uploadMiddleware, multerErrorHandler, mediaController.uploadPostImage);
 router.post('/upload', uploadMiddleware, multerErrorHandler, mediaController.upload);
 router.post('/upload-multiple', uploadMultipleMiddleware, multerErrorHandler, mediaController.uploadMultiple);
 

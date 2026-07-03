@@ -14,6 +14,8 @@ import adminRoutes from './v1/admin.routes';
 import healthRoutes from './v1/health.routes';
 import metricsRoutes from './v1/metrics.routes';
 import exploreRoutes from './v1/explore.routes';
+import connectionsRoutes from './v1/connections.routes';
+import storyUploadRoutes from '../story-upload/story.upload.routes';
 
 const router = Router();
 
@@ -35,12 +37,18 @@ router.use('/messages', messagesRoutes);
 router.use('/events', eventsRoutes);
 router.use('/notifications', notificationsRoutes);
 
+// Connections
+router.use('/connections', connectionsRoutes);
+
 // Discovery
 router.use('/explore', exploreRoutes);
 router.use('/search', searchRoutes);
 
 // Media
 router.use('/media', mediaRoutes);
+
+// Story Upload (isolated — stories/ S3 folder only)
+router.use('/story-upload', storyUploadRoutes);
 
 // Admin & Moderation
 router.use('/moderation', moderationRoutes);
