@@ -267,6 +267,7 @@ export default function CreateEvent() {
   const [volunteersRequired, setVolunteersRequired] = useState(false);
   const [bannerUri, setBannerUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const createEvent = useCreateEventMutation();
 
   const pickBanner = async () => {
@@ -307,7 +308,9 @@ export default function CreateEvent() {
     }
 
     const res = await apiClient.post('/media/upload-event', formData);
-    return res.data.data.url as string;
+    const uploadedUrl = res.data.data.url as string;
+    console.log('[uploadBanner] upload response url:', uploadedUrl);
+    return uploadedUrl;
   };
 
   const handleSubmit = async () => {
@@ -348,12 +351,33 @@ export default function CreateEvent() {
     };
     try {
       await createEvent.mutateAsync(payload);
+      setSubmitted(true);
     } catch {
-      // onError in the mutation already saves it locally
+      showToast('Failed to submit event. Please try again.', 'error');
     }
-    showToast('Event created successfully!', 'success');
-    goBack();
   };
+
+  // ── Pending Approval Screen ──────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32, paddingTop: insets.top }]}>
+        <View style={[styles.pendingIconWrap, { backgroundColor: '#FFF8E1' }]}>
+          <Ionicons name="time-outline" size={56} color="#F59E0B" />
+        </View>
+        <Text style={[styles.pendingTitle, { color: colors.text }]}>Event Submitted!</Text>
+        <Text style={[styles.pendingMessage, { color: colors.textSecondary }]}>
+          Your event has been submitted successfully and is awaiting admin approval. It will be published once an administrator approves it.
+        </Text>
+        <TouchableOpacity
+          onPress={goBack}
+          style={[styles.pendingBtn, { backgroundColor: colors.primary }]}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.pendingBtnText}>Back to Home</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -601,5 +625,36 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  pendingIconWrap: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  pendingTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  pendingMessage: {
+    fontSize: 15,
+    lineHeight: 24,
+    textAlign: 'center',
+    marginBottom: 36,
+  },
+  pendingBtn: {
+    paddingHorizontal: 40,
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  pendingBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });

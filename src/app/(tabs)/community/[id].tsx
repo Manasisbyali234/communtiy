@@ -58,14 +58,16 @@ export default function CommunityDetails() {
     );
   }
 
+  const communityStatus = (community as any).status;
+  const isApproved = !communityStatus || communityStatus === 'APPROVED';
+
   const renderHeader = () => (
     <View style={styles.detailsHeader}>
       {/* Cover / Banner */}
       <View style={styles.bannerContainer}>
         <Image source={{ uri: community.bannerUrl }} style={styles.banner} />
-        {/* Float Back button */}
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')}
           style={[styles.backBtn, { top: insets.top + 10, backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}
         >
           <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
@@ -74,17 +76,29 @@ export default function CommunityDetails() {
 
       {/* Avatar details */}
       <View style={[styles.infoContainer, { paddingHorizontal: spacing.lg }]}>
+        {!isApproved && (
+          <View style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="time-outline" size={18} color="#f59e0b" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#92400e', fontSize: 13, flex: 1 }}>
+              {communityStatus === 'REJECTED'
+                ? 'This community request was rejected by admin.'
+                : 'This community is pending admin approval. Posts cannot be created until approved.'}
+            </Text>
+          </View>
+        )}
         <View style={styles.avatarRow}>
           <View style={[styles.avatarBox, { borderColor: colors.background }]}>
             <Avatar url={community.avatarUrl} name={community.name} size={64} />
           </View>
-          <Button
-            title={community.isJoined ? 'Joined' : 'Join Community'}
-            variant={community.isJoined ? 'secondary' : 'gradient'}
-            size="sm"
-            onPress={handleJoinToggle}
-            style={styles.joinBtn}
-          />
+          {isApproved && (
+            <Button
+              title={community.isJoined ? 'Joined' : 'Join Community'}
+              variant={community.isJoined ? 'secondary' : 'gradient'}
+              size="sm"
+              onPress={handleJoinToggle}
+              style={styles.joinBtn}
+            />
+          )}
         </View>
 
         <Text style={[styles.name, { color: colors.text, fontSize: typography.sizes.xxl, fontWeight: typography.weights.bold }]}>

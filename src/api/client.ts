@@ -44,7 +44,10 @@ const processQueue = (error: any, token: string | null = null) => {
 export const refreshAccessToken = async (): Promise<string> => {
   const authState = useAuthStore.getState();
   const storedRefreshToken = authState.refreshToken;
-  if (!storedRefreshToken) throw new Error('No refresh token available');
+  if (!storedRefreshToken) {
+    authState.logout();
+    throw new Error('No refresh token available');
+  }
 
   const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
     refreshToken: storedRefreshToken,
@@ -70,7 +73,8 @@ apiClient.interceptors.response.use(
     const originalRequest = error.config;
 
     const isAuthRoute = originalRequest.url?.includes('/auth/');
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute) {
+    const hasRefreshToken = !!useAuthStore.getState().refreshToken;
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthRoute && hasRefreshToken) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });

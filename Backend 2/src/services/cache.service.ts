@@ -26,9 +26,6 @@ export const cacheService = {
    */
   async get<T = any>(key: string): Promise<T | null> {
     try {
-      // Clean up expired entries
-      await this.cleanup();
-
       const entry = await prisma.cacheEntry.findUnique({
         where: { key },
       });

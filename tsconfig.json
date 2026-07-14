@@ -11,6 +11,10 @@
       ]
     }
   },
+  "exclude": [
+    "Backend 2",
+    "node_modules"
+  ],
   "include": [
     "**/*.ts",
     "**/*.tsx",

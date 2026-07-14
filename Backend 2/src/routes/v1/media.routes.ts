@@ -7,6 +7,7 @@ import { ApiError } from '../../utils/ApiError';
 const router = Router();
 
 // Public proxy route — no auth needed so images load in <Image> components
+// Handles both encoded keys (feed%2Ffile.jpg) and slash-separated paths (feed/file.jpg)
 router.get('/proxy/:key(*)', mediaController.proxyFile);
 
 router.use(auth);

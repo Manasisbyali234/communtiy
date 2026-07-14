@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, ScrollView, TouchableOpacity,
   TextInput, Dimensions, Platform, Animated,
@@ -35,10 +35,7 @@ const TABS: { id: ExploreTab; label: string; icon: string }[] = [
   { id: 'events',      label: 'Events',       icon: 'calendar-outline' },
 ];
 
-const TRENDING_SEARCHES = [
-  '🎉 Gowda Sangha 2025', '🏠 Mandya Members', '🌿 Farmers Group',
-  '🛕 Temple Committee', '👩‍🎓 Youth Leaders',
-];
+const TRENDING_SEARCHES: string[] = [];
 
 const EVENT_FILTERS = ['All', 'Upcoming', 'Today', 'This Week', 'Past', 'My Events'];
 
@@ -149,9 +146,7 @@ export default function ExploreScreen() {
   const [searchText, setSearchText] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isFocused, setIsFocused] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([
-    'Suresh Gowda', 'Gowda Sabha', 'Temple Committee',
-  ]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [selectedEventFilter, setSelectedEventFilter] = useState('All');
   const [selectedCommType, setSelectedCommType] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
@@ -307,7 +302,10 @@ export default function ExploreScreen() {
       <View style={styles.memberCardLeft}>
         <View style={[styles.memberAvatarRing, { borderColor: G }]}>
           <ExpoImage
-            source={item.avatarUrl ? { uri: item.avatarUrl } : { uri: 'https://ui-avatars.com/api/?name=U&background=e8f5e9&color=4caf50' }}
+            source={item.avatarUrl
+              ? { uri: item.avatarUrl }
+              : { uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(item.displayName || item.username || 'U')}&background=e8f5e9&color=4caf50` }
+            }
             style={styles.memberAvatar}
             contentFit="cover"
           />

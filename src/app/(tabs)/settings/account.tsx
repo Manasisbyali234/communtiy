@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,17 +17,20 @@ export default function AccountScreen() {
   const showToast = useToastStore((s) => s.showToast);
   const [deleting, setDeleting] = useState(false);
 
+  const doLogout = async () => {
+    await logout();
+    showToast('Signed out successfully', 'info');
+    router.replace('/(auth)/login');
+  };
+
   const handleLogout = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to sign out?')) doLogout();
+      return;
+    }
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          showToast('Signed out successfully', 'info');
-        },
-      },
+      { text: 'Sign Out', style: 'destructive', onPress: doLogout },
     ]);
   };
 
@@ -46,6 +49,7 @@ export default function AccountScreen() {
               await apiClient.delete('/users/me');
               await logout();
               showToast('Account deleted', 'info');
+              router.replace('/(auth)/login');
             } catch {
               showToast('Failed to delete account. Try again.', 'error');
             } finally {

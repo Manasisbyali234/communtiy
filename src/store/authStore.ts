@@ -4,9 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { User } from '../types';
-import { API_BASE_URL } from '../api/config';
-
-const BASE = API_BASE_URL.replace('/api/v1', '');
+import { getApiBaseUrl } from '../api/config';
 
 // Normalise any image URL to use the current BASE host.
 // Handles three cases:
@@ -14,6 +12,7 @@ const BASE = API_BASE_URL.replace('/api/v1', '');
 //   2. Proxy URL with a different host (stale IP in AsyncStorage) → rewrite host to BASE
 //   3. External URL (https://...) → leave unchanged
 const toAbs = (url?: string | null): string | undefined => {
+  const BASE = getApiBaseUrl().replace('/api/v1', '');
   if (!url) return undefined;
   if (url.startsWith('/')) return `${BASE}${url}`;
   // Rewrite proxy URLs that point to a different host so they always use the current server IP.

@@ -3,6 +3,7 @@ import { EventReminderJobData } from '../types/index';
 import { logger } from '../config/logger';
 import { prisma } from '../config/database';
 import { notificationsService } from '../services/notifications.service';
+import { deviceTokensService } from '../services/deviceTokens.service';
 import { getIO } from '../sockets/index';
 
 export function startEventReminderWorker(): Worker {
@@ -43,21 +44,11 @@ export function startEventReminderWorker(): Worker {
           body: `Reminder: ${event.title} is starting soon!`,
         });
 
-        // 2. Real-time socket event
-        io.to(`user:${rsvp.userId}`).emit('notification:new', {
-          type: 'EVENT_REMINDER',
-          body: `Reminder: ${event.title} is starting soon!`,
-        });
-
-        // 3. Queue push notification
-        const user = await prisma.user.findUnique({ 
-          where: { id: rsvp.userId }, 
-          select: { deviceTokens: { select: { token: true } } }
-        });
-        
-        if (user?.deviceTokens?.length) {
+        // 2. Queue push notification per token
+        const tokens = await deviceTokensService.getTokensForUser(rsvp.userId);
+        for (const expoPushToken of tokens) {
           await pushQueue.add('send', {
-            tokens: user.deviceTokens.map(dt => dt.token),
+            expoPushToken,
             title: 'Upcoming Event',
             body: `${event.title} is starting soon!`,
             data: { eventId },

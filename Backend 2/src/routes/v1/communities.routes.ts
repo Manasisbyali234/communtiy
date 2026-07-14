@@ -72,4 +72,7 @@ router.delete('/:id/rules/:rid', communitiesController.deleteRule);
 // ── Posts ─────────────────────────────────────────────────────────────────────
 router.get('/:id/posts', validate({ query: CursorQuerySchema }), communitiesController.getPosts);
 
+// ── My Requests ───────────────────────────────────────────────────────────────
+router.get('/my/requests', communitiesController.getMyRequests);
+
 export default router;

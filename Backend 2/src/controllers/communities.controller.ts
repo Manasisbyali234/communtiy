@@ -12,7 +12,12 @@ export const communitiesController = {
 
   create: asyncHandler(async (req: Request, res: Response) => {
     const community = await communitiesService.create(req.user.id, req.body as { name: string; description?: string; category: string; isPrivate?: boolean; avatarUrl?: string; bannerUrl?: string; feedPostPrompts?: string[] });
-    res.status(201).json(new ApiResponse(201, community, 'Community created'));
+    res.status(201).json(new ApiResponse(201, community, 'Community creation request submitted. Awaiting admin approval.'));
+  }),
+
+  getMyRequests: asyncHandler(async (req: Request, res: Response) => {
+    const requests = await communitiesService.getMyRequests(req.user.id);
+    res.json(new ApiResponse(200, requests));
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {

@@ -13,8 +13,8 @@ const CreateEventSchema = z.object({
   location: z.string().max(200).optional(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime().optional(),
-  coverUrl: z.string().url().optional(),
-  communityId: z.string().cuid().optional(),
+  coverUrl: z.string().min(1).optional().or(z.literal('')).transform(v => v || undefined),
+  communityId: z.string().cuid().optional().or(z.literal('')).transform(v => v || undefined),
 });
 
 const RsvpSchema = z.object({ status: z.enum(['GOING', 'MAYBE', 'NOT_GOING']) });
@@ -22,7 +22,7 @@ const RsvpSchema = z.object({ status: z.enum(['GOING', 'MAYBE', 'NOT_GOING']) })
 const QuerySchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().min(1).max(100).default(20),
-  communityId: z.string().cuid().optional(),
+  communityId: z.string().cuid().optional().or(z.literal('')).transform(v => v || undefined),
   upcoming: z.coerce.boolean().optional(),
   search: z.string().optional(),
 });

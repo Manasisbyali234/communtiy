@@ -11,11 +11,14 @@ import mediaRoutes from './v1/media.routes';
 import searchRoutes from './v1/search.routes';
 import moderationRoutes from './v1/moderation.routes';
 import adminRoutes from './v1/admin.routes';
+import adminAuthRoutes from './v1/admin-auth.routes';
+import adminDashboardRoutes from './v1/admin-dashboard.routes';
 import healthRoutes from './v1/health.routes';
 import metricsRoutes from './v1/metrics.routes';
 import exploreRoutes from './v1/explore.routes';
 import connectionsRoutes from './v1/connections.routes';
 import storyUploadRoutes from '../story-upload/story.upload.routes';
+import marketRatesRoutes from './v1/marketRates.routes';
 
 const router = Router();
 
@@ -50,8 +53,15 @@ router.use('/media', mediaRoutes);
 // Story Upload (isolated — stories/ S3 folder only)
 router.use('/story-upload', storyUploadRoutes);
 
+// Market Rates
+router.use('/market-rates', marketRatesRoutes);
+
 // Admin & Moderation
 router.use('/moderation', moderationRoutes);
 router.use('/admin', adminRoutes);
+
+// Separate Admin Panel (no user JWT — uses AdminSession)
+router.use('/admin-auth', adminAuthRoutes);
+router.use('/admin-panel', adminDashboardRoutes);
 
 export default router;

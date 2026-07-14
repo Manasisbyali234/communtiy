@@ -177,7 +177,7 @@ export default function UserProfileScreen() {
     return (
       <View style={[styles.root, { backgroundColor: BG, paddingTop: insets.top }]}>
         <View style={[styles.navbar, { borderBottomColor: BORDER }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.navIconBtn}>
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.navIconBtn}>
             <Ionicons name="arrow-back" size={24} color={TEXT} />
           </TouchableOpacity>
           <Text style={[styles.navTitle, { color: TEXT }]}>Profile</Text>
@@ -206,7 +206,7 @@ export default function UserProfileScreen() {
         <Ionicons name="person-circle-outline" size={72} color={TEXT3} />
         <Text style={[styles.notFoundTitle, { color: TEXT }]}>Member Not Found</Text>
         <Text style={[styles.notFoundSub, { color: TEXT3 }]}>This profile may have been removed.</Text>
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: G }]}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={[styles.backBtn, { backgroundColor: G }]}>
           <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Go Back</Text>
         </TouchableOpacity>
       </View>
@@ -221,7 +221,7 @@ export default function UserProfileScreen() {
       {/* ── Animated App Bar ─────────────────────────────────────────────── */}
       <Animated.View style={[styles.navbar, { borderBottomColor: BORDER }]}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: SURF, opacity: navBgOpacity }]} />
-        <TouchableOpacity onPress={() => router.back()} style={styles.navIconBtn}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)')} style={styles.navIconBtn}>
           <Ionicons name="arrow-back" size={24} color={TEXT} />
         </TouchableOpacity>
         <Text style={[styles.navTitle, { color: TEXT }]} numberOfLines={1}>{user.displayName}</Text>

@@ -8,7 +8,7 @@ export const POST_SELECT = {
   id: true, content: true, mediaUrls: true, mediaType: true,
   videoUrl: true, videoFileName: true, mimeType: true, fileSize: true,
   likesCount: true, commentsCount: true, sharesCount: true,
-  isDraft: true, scheduledAt: true,
+  isDraft: true, scheduledAt: true, status: true,
   createdAt: true, updatedAt: true,
   author: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
   community: { select: { id: true, name: true, slug: true, avatarUrl: true } },
@@ -80,9 +80,9 @@ export const postsService = {
         isDraft: false,
         scheduledAt: null,
         OR: [
-          { authorId: { in: followingIds } },
-          { communityId: { in: communityIds } },
-          { authorId: userId },
+          { authorId: { in: followingIds }, communityId: null },
+          { communityId: { in: communityIds }, status: 'APPROVED' as any },
+          { authorId: userId, communityId: null },
         ],
         authorId: { notIn: blockedIds },
       },
@@ -107,6 +107,9 @@ export const postsService = {
     tags?: string[];
   }) {
     if (data.communityId) {
+      const community = await prisma.community.findUnique({ where: { id: data.communityId } });
+      if (!community) throw ApiError.notFound('Community not found');
+      if (community.status !== 'APPROVED') throw ApiError.forbidden('This community is not yet approved. You cannot post until the admin approves it.');
       const member = await prisma.communityMember.findUnique({
         where: { communityId_userId: { communityId: data.communityId, userId: authorId } },
       });
@@ -114,12 +117,14 @@ export const postsService = {
     }
 
     const { tags: _tags, mediaType, ...postData } = data;
+    const postStatus = data.communityId ? 'PENDING_APPROVAL' : 'APPROVED';
     const post = await prisma.post.create({
       data: {
         authorId,
         ...postData,
         content: postData.content ?? '',
         ...(mediaType ? { mediaType: mediaType as any } : {}),
+        status: postStatus as any,
       },
       select: POST_SELECT,
     });
@@ -143,7 +148,7 @@ export const postsService = {
 
   async getPost(postId: string, viewerId?: string) {
     const post = await prisma.post.findFirst({
-      where: { id: postId, deletedAt: null },
+      where: { id: postId, deletedAt: null, OR: [{ communityId: null }, { status: 'APPROVED' as any }] },
       select: {
         ...POST_SELECT,
         ...(viewerId ? {
@@ -255,6 +260,7 @@ export const postsService = {
         scheduledAt: null,
         createdAt: { gte: since },
         authorId: { notIn: blockedIds },
+        OR: [{ communityId: null }, { status: 'APPROVED' as any }],
       },
       select: POST_SELECT,
       orderBy: [{ likesCount: 'desc' }, { commentsCount: 'desc' }, { createdAt: 'desc' }],

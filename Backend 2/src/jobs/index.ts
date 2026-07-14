@@ -3,6 +3,7 @@ import { startPushWorker } from './pushWorker';
 import { startStoryExpiryWorker } from './storyExpiryWorker';
 import { startMediaWorker } from './mediaWorker';
 import { startEventReminderWorker } from './eventReminderWorker';
+import { startMarketRatesSyncJob } from './marketRatesSync.job';
 import { logger } from '../config/logger';
 
 export function initWorkers(): void {
@@ -12,5 +13,6 @@ export function initWorkers(): void {
   startStoryExpiryWorker();
   startMediaWorker();
   startEventReminderWorker();
+  startMarketRatesSyncJob();
   logger.info('BullMQ workers initialized');
 }

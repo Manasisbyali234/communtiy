@@ -64,14 +64,18 @@ function RootLayoutContent() {
     if (isLoading || !tokensInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
-    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'create' || segments[0] === 'chat' || segments[0] === 'story' || segments[0] === 'community';
+    const inAdminGroup = segments[0] === '(admin)' || segments[0] === 'admin-login';
+    const inAppGroup = segments[0] === '(tabs)' || segments[0] === 'create' || segments[0] === 'chat' || segments[0] === 'story' || segments[0] === 'community' || segments[0] === 'krushi-mitra' || segments[0] === 'market-rates';
+
+    // Admin routes are handled by their own layout — skip user auth guard
+    if (inAdminGroup) return;
 
     if (!isAuthenticated) {
       if (!inAuthGroup) {
         router.replace(!isOnboarded ? '/(auth)/onboarding' : '/(auth)/login');
       }
     } else {
-      if (inAuthGroup || (!inAppGroup && segments[0] !== undefined)) {
+      if (inAuthGroup || !inAppGroup) {
         if (!redirectedToIntended.current && intendedPath && !intendedPath.startsWith('/(auth)') && intendedPath !== '/') {
           redirectedToIntended.current = true;
           router.replace(intendedPath as any);

@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiClient, API_BASE_URL } from './client';
+import { apiClient } from './client';
+import { getApiBaseUrl } from './config';
 import { ApiResponse } from '../types';
 import { useAuthStore } from '../store/authStore';
 
-const BASE = API_BASE_URL.replace('/api/v1', '');
-
 export function toProxyUrl(url?: string): string | undefined {
   if (!url) return undefined;
+  const BASE = getApiBaseUrl().replace('/api/v1', '');
   const s3Match = url.match(/https?:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(.+)/);
   if (s3Match) return `${BASE}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
   if (url.startsWith('/')) return `${BASE}${url}`;

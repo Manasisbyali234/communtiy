@@ -12,11 +12,3 @@ export const globalRateLimiter = rateLimit({
   },
 });
 
-export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
-  message: 'Too many auth attempts, please try again in 15 minutes.',
-  handler: (_req, _res, next) => {
-    next(new ApiError(429, 'Too many auth attempts. Please wait 15 minutes.'));
-  },
-});

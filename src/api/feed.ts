@@ -1,14 +1,29 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, API_BASE_URL } from './client';
+import { apiClient } from './client';
+import { getApiBaseUrl } from './config';
 import { Post, Comment, User, PaginatedResponse, ApiResponse } from '../types';
 import { useAuthStore } from '../store/authStore';
 
-const getBase = () => API_BASE_URL.replace('/api/v1', '');
+const getBase = () => getApiBaseUrl().replace('/api/v1', '');
 
 const toAbs = (url?: string): string | undefined => {
   if (!url) return undefined;
   // Relative path → prepend backend base
   if (url.startsWith('/')) return `${getBase()}${url}`;
+  // Proxy URL with a stale host → rewrite to current server
+  if (url.includes('/api/v1/media/proxy/')) {
+    try {
+      const parsed = new URL(url);
+      const current = new URL(getBase());
+      if (parsed.host !== current.host) {
+        parsed.host = current.host;
+        parsed.port = current.port;
+        parsed.protocol = current.protocol;
+        return parsed.toString();
+      }
+      return url;
+    } catch (_) { return url; }
+  }
   // S3 direct URL → rewrite through backend media proxy
   const s3Match = url.match(/https?:\/\/[^/]+\.s3\.[^/]+\.amazonaws\.com\/(.+)/);
   if (s3Match) return `${getBase()}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
@@ -79,7 +94,7 @@ export function usePostsQuery() {
   return useQuery<Post[]>({
     queryKey: feedKeys.posts(),
     enabled: isAuthenticated,
-    staleTime: 60_000,
+    staleTime: 0,
     queryFn: async () => {
       const [feedRes, trendingRes] = await Promise.all([
         apiClient.get<ApiResponse<PaginatedResponse<Post>>>('/posts/feed'),
@@ -111,9 +126,10 @@ export function useCommunityPostsQuery(communityId: string) {
   return useQuery<Post[]>({
     queryKey: feedKeys.communityPosts(communityId),
     enabled: !!communityId && isAuthenticated,
+    staleTime: 0,
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PaginatedResponse<Post>>>(`/communities/${communityId}/posts`);
-      return (res.data.data.data ?? []).map(normalizePost);
+      return (res.data.data.data ?? []).map(normalizePost).filter((p: any) => !p.status || p.status === 'APPROVED');
     },
   });
 }
@@ -163,9 +179,9 @@ export function useCreatePostMutation() {
       return res.data.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
-      if (data.communityId) {
-        queryClient.invalidateQueries({ queryKey: feedKeys.communityPosts(data.communityId) });
+      // Only invalidate community posts if the post is approved (non-community posts are always approved)
+      if (!data.communityId) {
+        queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
       }
     },
   });

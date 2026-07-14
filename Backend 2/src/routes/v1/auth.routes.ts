@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { authController } from '../../controllers/auth.controller';
 import { validate } from '../../middleware/validate';
 import { auth } from '../../middleware/auth';
-import { authRateLimiter } from '../../middleware/rateLimiter';
 
 const router = Router();
 
@@ -47,19 +46,19 @@ const GoogleSchema = z.object({ idToken: z.string().min(1) });
 const AppleSchema = z.object({ identityToken: z.string().min(1) });
 
 // ── Public routes ─────────────────────────────────────────────────────────────
-router.post('/register', authRateLimiter, validate({ body: RegisterSchema }), authController.register);
-router.post('/login', authRateLimiter, validate({ body: LoginSchema }), authController.login);
+router.post('/register', validate({ body: RegisterSchema }), authController.register);
+router.post('/login', validate({ body: LoginSchema }), authController.login);
 router.post('/refresh', validate({ body: RefreshSchema }), authController.refresh);
-router.post('/forgot-password', authRateLimiter, validate({ body: ForgotPasswordSchema }), authController.forgotPassword);
-router.post('/reset-password', authRateLimiter, validate({ body: ResetPasswordSchema }), authController.resetPassword);
+router.post('/forgot-password', validate({ body: ForgotPasswordSchema }), authController.forgotPassword);
+router.post('/reset-password', validate({ body: ResetPasswordSchema }), authController.resetPassword);
 
 // Passwordless OTP login
-router.post('/otp-login', authRateLimiter, validate({ body: OtpLoginRequestSchema }), authController.requestOtpLogin);
-router.post('/otp-verify', authRateLimiter, validate({ body: OtpLoginVerifySchema }), authController.verifyOtpLogin);
+router.post('/otp-login', validate({ body: OtpLoginRequestSchema }), authController.requestOtpLogin);
+router.post('/otp-verify', validate({ body: OtpLoginVerifySchema }), authController.verifyOtpLogin);
 
 // Social sign-in
-router.post('/google', authRateLimiter, validate({ body: GoogleSchema }), authController.googleSignIn);
-router.post('/apple', authRateLimiter, validate({ body: AppleSchema }), authController.appleSignIn);
+router.post('/google', validate({ body: GoogleSchema }), authController.googleSignIn);
+router.post('/apple', validate({ body: AppleSchema }), authController.appleSignIn);
 
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post('/logout', auth, validate({ body: RefreshSchema }), authController.logout);

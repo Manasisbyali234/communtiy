@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
-import { s3, storageBucket } from '../config/storage';
+import { s3, storageBucket, storagePublicUrl } from '../config/storage';
 import { config } from '../config';
 
 // Serve images through the backend proxy so S3 bucket doesn't need public access
@@ -45,7 +45,23 @@ export const mediaService = {
     const filename = `${crypto.randomUUID()}${extension}`;
     const key = `events/${filename}`;
 
-    return this._uploadToS3(file, key, uploadedBy);
+    await s3.send(new PutObjectCommand({
+      Bucket: storageBucket,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    }));
+
+    // Store a relative proxy URL so any client IP resolves it correctly via toAbs()
+    const url = `/api/v1/media/proxy/${encodeURIComponent(key)}`;
+
+    console.log('[uploadEventImage] S3 key:', key, '| db url:', url);
+
+    const mediaFile = await prisma.mediaFile.create({
+      data: { filename: key, originalName: file.originalname, mimeType: file.mimetype, fileSize: file.size, url, uploadedBy },
+    });
+
+    return { id: mediaFile.id, filename: key, url };
   },
 
   async uploadProfilePhoto(file: UploadedFile, uploadedBy: string): Promise<{ id: string; filename: string; url: string }> {

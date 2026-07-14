@@ -5,6 +5,7 @@ import { generateOtp, otpExpiresAt } from '../utils/otp';
 import { tokenService } from './token.service';
 import { emailService } from './email.service';
 import { config } from '../config/index';
+import { logger } from '../config/logger';
 import { TokenPair } from '../types/index';
 
 export const authService = {
@@ -34,9 +35,11 @@ export const authService = {
       select: { id: true, email: true, username: true, displayName: true, role: true, isVerified: true },
     });
 
-    // Create + send OTP
+    // Create OTP and send email non-blocking (SMTP failure won't break registration)
     const otp = await this.createOtp(user.id, 'VERIFY_EMAIL');
-    await emailService.sendOtp(user.email, otp, 'VERIFY_EMAIL');
+    emailService.sendOtp(user.email, otp, 'VERIFY_EMAIL').catch((err) =>
+      logger.error({ err }, 'Failed to send verification email')
+    );
 
     const tokens = await tokenService.generateTokenPair(user);
 

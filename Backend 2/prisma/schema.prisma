@@ -27,6 +27,24 @@ enum CommunityMemberStatus {
   REJECTED
 }
 
+enum CommunityStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PostStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum EventStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 enum MediaType {
   IMAGE
   VIDEO
@@ -70,6 +88,12 @@ enum NotificationType {
   COMMUNITY_INVITE
   CONNECTION_REQUEST
   CONNECTION_ACCEPTED
+  COMMUNITY_APPROVED
+  COMMUNITY_REJECTED
+  POST_APPROVED
+  POST_REJECTED
+  EVENT_APPROVED
+  EVENT_REJECTED
 }
 
 enum ConnectionStatus {
@@ -285,6 +309,7 @@ model Post {
   sharesCount   Int        @default(0)
   isDraft       Boolean    @default(false)
   scheduledAt   DateTime?
+  status        PostStatus @default(APPROVED)
   deletedAt     DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
@@ -301,6 +326,7 @@ model Post {
   @@index([deletedAt])
   @@index([isDraft])
   @@index([scheduledAt])
+  @@index([status])
 }
 
 model Comment {
@@ -401,14 +427,15 @@ model StoryReply {
 }
 
 model Community {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
-  slug        String   @unique
+  slug        String          @unique
   description String?
   avatarUrl   String?
   bannerUrl   String?
   category    String
-  isPrivate   Boolean  @default(false)
+  isPrivate   Boolean         @default(false)
+  status      CommunityStatus @default(PENDING)
   memberCount       Int      @default(0)
   feedPostPrompts   String[]
   createdAt         DateTime @default(now())
@@ -554,11 +581,14 @@ model Event {
   startsAt    DateTime
   endsAt      DateTime?
   coverUrl    String?
-  rsvpCount   Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  rsvpCount   Int         @default(0)
+  status      EventStatus @default(PENDING_APPROVAL)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   rsvps EventRsvp[]
+
+  @@index([status])
 
   @@index([communityId])
   @@index([startsAt])
@@ -682,6 +712,25 @@ model ConnectionRequest {
   @@index([status])
 }
 
+model MarketRate {
+  id          String   @id @default(cuid())
+  cropName    String
+  marketName  String
+  district    String
+  state       String
+  arrivalDate DateTime @db.Date
+  variety     String   @default("Other")
+  grade       String   @default("FAQ")
+  minPrice    Float
+  modalPrice  Float
+  maxPrice    Float
+  createdAt   DateTime @default(now())
+
+  @@index([cropName])
+  @@index([arrivalDate(sort: Desc)])
+  @@index([cropName, arrivalDate])
+}
+
 model DailyStats {
   id             String   @id @default(cuid())
   date           DateTime @unique
@@ -694,4 +743,15 @@ model DailyStats {
   createdAt      DateTime @default(now())
 
   @@index([date(sort: Desc)])
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  adminId   String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([token])
 }

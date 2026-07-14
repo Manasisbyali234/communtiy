@@ -2,7 +2,38 @@ import { prisma } from '../config/database';
 import { ApiError } from '../utils/ApiError';
 import { buildCursorArgs, buildCursorPage } from '../utils/pagination';
 import { getQueue, QUEUE_NAMES } from '../config/bullmq';
-import { RsvpStatus } from '@prisma/client';
+import { RsvpStatus, EventStatus } from '@prisma/client';
+import { emailService } from './email.service';
+
+// Normalise any coverUrl variant to a relative proxy path so the frontend's
+// toAbs() can prepend the correct host at runtime regardless of server IP.
+function normalizeCoverUrl(coverUrl: string | null | undefined): string | null {
+  if (!coverUrl) return null;
+
+  // Already a relative proxy path — ideal, leave it alone
+  if (coverUrl.startsWith('/api/v1/media/proxy/')) return coverUrl;
+
+  try {
+    const url = new URL(coverUrl);
+
+    // Absolute proxy URL with any host (e.g. old IP) — extract path and make relative
+    if (url.pathname.startsWith('/api/v1/media/proxy/')) {
+      const relativeProxyUrl = url.pathname + url.search;
+      console.log('[normalizeCoverUrl] rewrote absolute proxy URL to relative:', relativeProxyUrl);
+      return relativeProxyUrl;
+    }
+
+    // Legacy direct S3 URL — extract the key and rewrite to relative proxy path
+    if (url.hostname.includes('amazonaws.com')) {
+      const key = url.pathname.replace(/^\//, '');
+      const relativeProxyUrl = `/api/v1/media/proxy/${encodeURIComponent(key)}`;
+      console.log('[normalizeCoverUrl] rewrote legacy S3 URL to relative proxy:', relativeProxyUrl);
+      return relativeProxyUrl;
+    }
+  } catch {}
+
+  return coverUrl;
+}
 
 export const eventsService = {
   async list(params: { cursor?: string; limit?: number; communityId?: string; upcoming?: boolean; search?: string }) {
@@ -12,6 +43,7 @@ export const eventsService = {
     const events = await prisma.event.findMany({
       ...args,
       where: {
+        status: EventStatus.APPROVED,
         ...(communityId ? { communityId } : {}),
         ...(upcoming ? { startsAt: { gt: new Date() } } : {}),
         ...(search ? { OR: [{ title: { contains: search, mode: 'insensitive' } }, { location: { contains: search, mode: 'insensitive' } }] } : {}),
@@ -20,7 +52,9 @@ export const eventsService = {
       orderBy: { startsAt: 'asc' },
     });
 
-    return buildCursorPage(events, limit);
+    const normalized = events.map(e => ({ ...e, coverUrl: normalizeCoverUrl(e.coverUrl) }));
+    console.log('[eventsService.list] sample coverUrls:', normalized.slice(0, 3).map(e => ({ id: e.id, coverUrl: e.coverUrl })));
+    return buildCursorPage(normalized, limit);
   },
 
   async create(creatorId: string, data: {
@@ -28,7 +62,7 @@ export const eventsService = {
     startsAt: Date; endsAt?: Date; coverUrl?: string; communityId?: string;
   }) {
     const event = await prisma.event.create({
-      data: { creatorId, ...data },
+      data: { creatorId, ...data, status: EventStatus.PENDING_APPROVAL },
       include: { community: { select: { id: true, name: true } } },
     });
 
@@ -37,6 +71,16 @@ export const eventsService = {
     if (reminderDelay > 0) {
       const queue = getQueue(QUEUE_NAMES.EVENT_REMINDER);
       await queue.add('remind', { eventId: event.id }, { delay: reminderDelay });
+    }
+
+    // Email admin about new event pending approval
+    const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { email: true } });
+    if (adminUser) {
+      await emailService.sendAdminAlert(
+        adminUser.email,
+        `New Event Pending Approval: "${data.title}"`,
+        `A new event <strong>"${data.title}"</strong> has been submitted and is awaiting your approval.`,
+      ).catch(() => {});
     }
 
     return event;
@@ -51,8 +95,9 @@ export const eventsService = {
       },
     });
     if (!event) throw ApiError.notFound('Event not found');
+    if (event.status !== EventStatus.APPROVED) throw ApiError.notFound('Event not found');
 
-    return { ...event, myRsvp: event.rsvps[0]?.status ?? null };
+    return { ...event, coverUrl: normalizeCoverUrl(event.coverUrl), myRsvp: event.rsvps[0]?.status ?? null };
   },
 
   async update(eventId: string, creatorId: string, data: Partial<{ title: string; description: string; location: string; startsAt: Date; endsAt: Date; coverUrl: string }>) {

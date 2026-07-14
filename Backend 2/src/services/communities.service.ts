@@ -5,6 +5,7 @@ import { buildCursorArgs, buildCursorPage } from '../utils/pagination';
 import { CommunityMemberRole, CommunityMemberStatus } from '@prisma/client';
 import { POST_SELECT } from './posts.service';
 import { notificationsService } from './notifications.service';
+import { emailService } from './email.service';
 
 export const communitiesService = {
   async list(params: { cursor?: string; limit?: number; category?: string; search?: string; sort?: 'popular' | 'newest'; userId?: string }) {
@@ -14,6 +15,7 @@ export const communitiesService = {
     const communities = await prisma.community.findMany({
       ...args,
       where: {
+        status: 'APPROVED',
         ...(category ? { category: { equals: category, mode: 'insensitive' } } : {}),
         ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { description: { contains: search, mode: 'insensitive' } }] } : {}),
       },
@@ -36,19 +38,54 @@ export const communitiesService = {
     const existing = await prisma.community.findUnique({ where: { slug } });
     if (existing) slug = slugifyWithSuffix(data.name, Date.now().toString(36));
 
-    return prisma.community.create({
+    const community = await prisma.community.create({
       data: {
         ...data,
         slug,
-        memberCount: 1,
+        status: 'PENDING',
+        memberCount: 0,
         members: { create: { userId: creatorId, role: CommunityMemberRole.ADMIN, status: CommunityMemberStatus.ACTIVE } },
       },
+    });
+
+    // Email admin about new community pending approval
+    const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { email: true } });
+    if (adminUser) {
+      await emailService.sendAdminAlert(
+        adminUser.email,
+        `New Community Pending Approval: "${data.name}"`,
+        `A new community <strong>"${data.name}"</strong> has been submitted and is awaiting your approval.`,
+      ).catch(() => {});
+    }
+
+    return community;
+  },
+
+  async getMyRequests(userId: string) {
+    const memberships = await prisma.communityMember.findMany({
+      where: { userId, role: CommunityMemberRole.ADMIN },
+      select: { communityId: true },
+    });
+    const communityIds = memberships.map((m) => m.communityId);
+    return prisma.community.findMany({
+      where: { id: { in: communityIds }, status: { in: ['PENDING', 'REJECTED'] } },
+      orderBy: { createdAt: 'desc' },
     });
   },
 
   async getById(id: string, userId: string) {
     const community = await prisma.community.findUnique({ where: { id } });
     if (!community) throw ApiError.notFound('Community not found');
+
+    // Only allow access to non-APPROVED communities for their admin creator
+    if (community.status !== 'APPROVED') {
+      const membership = await prisma.communityMember.findUnique({
+        where: { communityId_userId: { communityId: id, userId } },
+      });
+      if (!membership || membership.role !== CommunityMemberRole.ADMIN) {
+        throw ApiError.notFound('Community not found');
+      }
+    }
 
     const membership = await prisma.communityMember.findUnique({
       where: { communityId_userId: { communityId: id, userId } },
@@ -196,7 +233,7 @@ export const communitiesService = {
     const args = buildCursorArgs({ cursor, limit });
     const posts = await prisma.post.findMany({
       ...args,
-      where: { communityId, deletedAt: null, isDraft: false },
+      where: { communityId, deletedAt: null, isDraft: false, status: 'APPROVED' as any },
       select: POST_SELECT,
       orderBy: { createdAt: 'desc' },
     });

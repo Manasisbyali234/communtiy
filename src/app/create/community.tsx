@@ -83,6 +83,7 @@ export default function CreateCommunity() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; description?: string; category?: string }>({});
+  const [submitted, setSubmitted] = useState(false);
 
   // Rules
   const [rules, setRules] = useState<{ title: string; description: string }[]>([]);
@@ -209,12 +210,8 @@ export default function CreateCommunity() {
 
       await queryClient.invalidateQueries({ queryKey: communityKeys.list() });
       await queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
-      showToast('Community created!', 'success');
-      if (newCommunityId) {
-        router.replace({ pathname: '/(tabs)/community/[id]', params: { id: newCommunityId } } as any);
-      } else {
-        goBack();
-      }
+      await queryClient.invalidateQueries({ queryKey: [...communityKeys.all, 'my-requests'] });
+      setSubmitted(true);
     } catch (err: any) {
       console.log('[create-community] error:', JSON.stringify(err?.response?.data));
       const data = err?.response?.data;
@@ -227,6 +224,27 @@ export default function CreateCommunity() {
       setUploading(false);
     }
   };
+
+  if (submitted) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Ionicons name="time-outline" size={64} color={colors.primary} style={{ marginBottom: 24 }} />
+        <Text style={[styles.headerTitle, { color: colors.text, fontSize: 20, textAlign: 'center', marginBottom: 16 }]}>
+          Request Submitted!
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+          Your community creation request has been submitted successfully. It is awaiting admin approval. You can create and manage community posts only after the community is approved by the admin.
+        </Text>
+        <TouchableOpacity
+          onPress={goBack}
+          style={[styles.fullWidthButton, { backgroundColor: colors.primary }]}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.fullWidthButtonText, { color: '#FFF' }]}>Back to Communities</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView

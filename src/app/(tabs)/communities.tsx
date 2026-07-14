@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useTheme } from '../../theme';
-import { useCommunitiesQuery, useJoinCommunityMutation } from '../../api/community';
+import { useCommunitiesQuery, useJoinCommunityMutation, useMyCommunitiesRequestsQuery } from '../../api/community';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Avatar from '../../components/common/Avatar';
@@ -18,6 +18,7 @@ export default function CommunitiesDirectory() {
   const router = useRouter();
 
   const { data: communities = [], isLoading } = useCommunitiesQuery();
+  const { data: myRequests = [] } = useMyCommunitiesRequestsQuery();
   const joinMutation = useJoinCommunityMutation();
   const showToast = useToastStore((state) => state.showToast);
 
@@ -129,6 +130,41 @@ export default function CommunitiesDirectory() {
         </TouchableOpacity>
       </View>
 
+      {/* My Requests Banner */}
+      {myRequests.length > 0 && (
+        <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+          {myRequests.map((req: any) => (
+            <View key={req.id} style={[
+              styles.requestBanner,
+              { backgroundColor: req.status === 'REJECTED' ? '#fef2f2' : '#fffbeb', borderColor: req.status === 'REJECTED' ? '#fca5a5' : '#fcd34d' }
+            ]}>
+              <Ionicons
+                name={req.status === 'REJECTED' ? 'close-circle-outline' : 'time-outline'}
+                size={18}
+                color={req.status === 'REJECTED' ? '#ef4444' : '#f59e0b'}
+                style={{ marginRight: 8 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: '700', fontSize: 13, color: req.status === 'REJECTED' ? '#b91c1c' : '#92400e' }}>
+                  {req.name}
+                </Text>
+                <Text style={{ fontSize: 12, color: req.status === 'REJECTED' ? '#b91c1c' : '#92400e', marginTop: 2 }}>
+                  {req.status === 'REJECTED' ? 'Community request was rejected by admin.' : 'Pending admin approval — not yet visible publicly.'}
+                </Text>
+              </View>
+              <View style={[
+                styles.statusBadge,
+                { backgroundColor: req.status === 'REJECTED' ? '#fee2e2' : '#fef3c7' }
+              ]}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: req.status === 'REJECTED' ? '#ef4444' : '#f59e0b' }}>
+                  {req.status === 'REJECTED' ? 'REJECTED' : 'PENDING'}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* Search Input Bar */}
       <View style={styles.searchContainer}>
         <View style={[styles.searchBar, { backgroundColor: colors.inputBg, borderRadius: roundness.md }]}>
@@ -201,6 +237,20 @@ export default function CommunitiesDirectory() {
 }
 
 const styles = StyleSheet.create({
+  requestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
   container: {
     flex: 1,
   },

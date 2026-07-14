@@ -122,13 +122,6 @@ export default function ChatListScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : chats.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: typography.sizes.md }]}>
-            No messages yet.
-          </Text>
-        </View>
       ) : isSearching && filteredChats.length === 0 ? (
         <FlatList
           data={searchedUsers}
@@ -166,6 +159,13 @@ export default function ChatListScreen() {
             </View>
           }
         />
+      ) : chats.length === 0 && !isSearching ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="chatbubbles-outline" size={64} color={colors.textMuted} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary, fontSize: typography.sizes.md }]}>
+            No messages yet.
+          </Text>
+        </View>
       ) : (
         <FlatList
           data={filteredChats}

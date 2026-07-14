@@ -131,15 +131,23 @@ export const mediaController = {
 
   // Proxy S3 object by key — avoids needing public bucket access
   proxyFile: asyncHandler(async (req: Request, res: Response) => {
-    const key = decodeURIComponent(req.params['key']);
+    const raw = req.params['key'];
+    // Support both encoded (feed%2Ffile.jpg) and decoded (feed/file.jpg) keys
+    const key = raw.includes('%') ? decodeURIComponent(raw) : raw;
     try {
       const command = new GetObjectCommand({ Bucket: storageBucket, Key: key });
       const s3Res = await s3.send(command);
       if (s3Res.ContentType) res.setHeader('Content-Type', s3Res.ContentType);
       if (s3Res.ContentLength) res.setHeader('Content-Length', s3Res.ContentLength);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      (s3Res.Body as Readable).pipe(res);
-    } catch {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      const stream = s3Res.Body as Readable;
+      stream.on('error', (err) => {
+        console.error('[proxyFile] stream error for key:', key, err.message);
+        if (!res.headersSent) res.status(500).end();
+      });
+      stream.pipe(res);
+    } catch (err: any) {
+      console.error('[proxyFile] S3 error for key:', key, err?.name, err?.message);
       throw ApiError.notFound('File not found');
     }
   }),

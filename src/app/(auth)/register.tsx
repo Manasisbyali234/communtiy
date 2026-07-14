@@ -72,7 +72,7 @@ export default function Register() {
     } catch (e: any) {
       const message = e.response?.data?.message ?? e.message ?? 'Registration failed. Try again.';
       showToast(message, 'error');
-      console.error('[Register] error:', e.message, e.response?.status, e.response?.data);
+      if (!e.response) console.error('[Register] error:', e.message);
     }
   };
 

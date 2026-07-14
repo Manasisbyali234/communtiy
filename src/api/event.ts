@@ -7,17 +7,34 @@ import { useEventStore } from '../store/eventStore';
 const getBase = () => API_BASE_URL.replace('/api/v1', '');
 const toAbs = (url?: string): string | undefined => {
   if (!url) return undefined;
+  // Direct S3 URL — rewrite to backend proxy so private bucket objects load
+  if (url.includes('amazonaws.com')) {
+    try {
+      const parsed = new URL(url);
+      const key = parsed.pathname.replace(/^\//, '');
+      return `${getBase()}/api/v1/media/proxy/${encodeURIComponent(key)}`;
+    } catch {}
+  }
+  // Absolute proxy URL with any host (e.g. stale IP) — repoint to current server
+  if (url.startsWith('http')) {
+    try {
+      const parsed = new URL(url);
+      if (parsed.pathname.startsWith('/api/v1/media/proxy/')) {
+        return `${getBase()}${parsed.pathname}${parsed.search}`;
+      }
+    } catch {}
+    return url;
+  }
+  // Relative proxy path — prepend the server base so Image gets an absolute URL
   if (url.startsWith('/')) return `${getBase()}${url}`;
-  const s3Match = url.match(/https?:\/\/.+?\.amazonaws\.com\/(.+)/);
-  if (s3Match) return `${getBase()}/api/v1/media/proxy/${encodeURIComponent(s3Match[1])}`;
-  if (url.includes('localhost')) return url.replace(/http:\/\/localhost(:\d+)?/, getBase());
   return url;
 };
 
-const normalizeEvent = (e: any): Event => ({
-  ...e,
-  coverUrl: toAbs(e.coverUrl),
-});
+const normalizeEvent = (e: any): Event => {
+  const coverUrl = toAbs(e.coverUrl);
+  console.log('[normalizeEvent] id:', e.id, '| raw coverUrl:', e.coverUrl, '| resolved:', coverUrl);
+  return { ...e, coverUrl };
+};
 
 export const eventKeys = {
   all: ['events'] as const,
@@ -31,12 +48,15 @@ export function useEventsQuery() {
 
   const query = useQuery<Event[]>({
     queryKey: eventKeys.list(),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,  // 30 min — prevents unnecessary refetches that can break image URLs
+    gcTime: 60 * 60 * 1000,     // 1 hour — keep cached data alive across navigations
     queryFn: async () => {
       try {
         const res = await apiClient.get<ApiResponse<PaginatedResponse<Event>>>('/events');
         const data = res.data.data.data;
-        return (data ?? []).map(normalizeEvent);
+        const normalized = (data ?? []).map(normalizeEvent).filter((e: any) => !e.status || e.status === 'APPROVED');
+        console.log('[useEventsQuery] events coverUrls:', normalized.map((e: Event) => ({ id: e.id, coverUrl: e.coverUrl })));
+        return normalized;
       } catch {
         return [];
       }
@@ -62,7 +82,6 @@ export function useEventsQuery() {
 }
 
 export function useCreateEventMutation() {
-  const addLocalEvent = useEventStore((s) => s.addEvent);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -77,26 +96,12 @@ export function useCreateEventMutation() {
       const res = await apiClient.post<ApiResponse<Event>>('/events', payload);
       return normalizeEvent(res.data.data);
     },
-    onSuccess: (newEvent) => {
-      addLocalEvent(newEvent);
+    onSuccess: () => {
+      // Do NOT add to local store — event is PENDING_APPROVAL and must not show publicly
       queryClient.invalidateQueries({ queryKey: eventKeys.list() });
     },
-    onError: (_err, variables) => {
-      // Backend failed — create a local-only event so it still shows in the UI
-      const localEvent: Event = {
-        id: `local-${Date.now()}`,
-        title: variables.title,
-        description: variables.description,
-        location: variables.location,
-        startsAt: variables.startsAt,
-        endsAt: variables.endsAt,
-        coverUrl: variables.coverUrl,
-        rsvpCount: 0,
-        creatorId: 'local',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      addLocalEvent(localEvent);
+    onError: () => {
+      // Do not create local fallback — pending events must not appear before admin approval
     },
   });
 }

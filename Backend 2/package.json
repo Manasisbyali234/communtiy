@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:clear-dummy": "tsx prisma/clear-dummy.ts",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "test": "jest --runInBand --forceExit",

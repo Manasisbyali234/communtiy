@@ -6,7 +6,7 @@ const CACHE_TTL = 600; // 10 minutes
 
 async function withCache<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const cached = await redis.get(key);
-  if (cached) return JSON.parse(cached) as T;
+  if (cached) return cached as unknown as T;
   const result = await fn();
   await redis.set(key, JSON.stringify(result), 'EX', CACHE_TTL);
   return result;
@@ -25,6 +25,7 @@ export const exploreService = {
           scheduledAt: null,
           createdAt: { gte: since },
           authorId: { notIn: blockedIds },
+          OR: [{ communityId: null }, { status: 'APPROVED' }],
         },
         select: {
           id: true, content: true, mediaUrls: true, mediaType: true,
@@ -41,7 +42,7 @@ export const exploreService = {
   async getTrendingCommunities(limit = 10) {
     return withCache(`explore:trending_communities:${limit}`, () =>
       prisma.community.findMany({
-        where: { isPrivate: false },
+        where: { isPrivate: false, status: 'APPROVED' },
         orderBy: { memberCount: 'desc' },
         take: limit,
         select: { id: true, name: true, slug: true, avatarUrl: true, memberCount: true, category: true, description: true },
@@ -114,7 +115,7 @@ export const exploreService = {
 
     if (!categories.length) {
       return prisma.community.findMany({
-        where: { isPrivate: false, id: { notIn: joinedIds } },
+        where: { isPrivate: false, status: 'APPROVED', id: { notIn: joinedIds } },
         orderBy: { memberCount: 'desc' },
         take: limit,
         select: { id: true, name: true, slug: true, avatarUrl: true, memberCount: true, category: true, description: true },
@@ -124,6 +125,7 @@ export const exploreService = {
     return prisma.community.findMany({
       where: {
         isPrivate: false,
+        status: 'APPROVED',
         id: { notIn: joinedIds },
         category: { in: categories },
       },

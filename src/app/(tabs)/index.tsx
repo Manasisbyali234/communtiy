@@ -34,7 +34,7 @@ const QUICK_ACTIONS = [
   { id: 'post', icon: 'create-outline', label: 'New Post', color: '#2D6A2D', route: '/(tabs)/create' },
   { id: 'members', icon: 'people-outline', label: 'Members', color: '#E65100', route: '/(tabs)/explore' },
   { id: 'events', icon: 'calendar-outline', label: 'Events', color: '#F9A825', route: '/(tabs)/explore?tab=events' },
-  { id: 'village', icon: 'home-outline', label: 'My Village', color: '#5D4037', route: '/(tabs)/profile' },
+  { id: 'krushi-mitra', icon: 'leaf', label: 'Krushi Mitra', color: '#2D6A2D', route: '/krushi-mitra' },
 ];
 
 

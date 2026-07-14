@@ -3,6 +3,10 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Returns a Date that is `daysAgo` days and `hoursAgo` hours before now
+const ago = (daysAgo: number, hoursAgo = 0) =>
+  new Date(Date.now() - (daysAgo * 24 + hoursAgo) * 60 * 60 * 1000);
+
 async function main() {
   console.log('🌱 Seeding database...');
 
@@ -25,9 +29,9 @@ async function main() {
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 
-  const passwordHash = await bcrypt.hash('Password123!', 12);
+  const passwordHash = await bcrypt.hash('Admin@1234', 12);
 
-  // ── Users ──────────────────────────────────────────────────────────────────
+  // ── Users (registered on different days) ──────────────────────────────────
   const admin = await prisma.user.create({
     data: {
       email: 'admin@community.app',
@@ -37,6 +41,7 @@ async function main() {
       role: Role.ADMIN,
       isVerified: true,
       bio: 'Platform administrator',
+      createdAt: ago(30),
     },
   });
 
@@ -49,6 +54,7 @@ async function main() {
       isVerified: true,
       bio: 'Agriculturist from Mandya',
       avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+      createdAt: ago(14),
     },
   });
 
@@ -61,6 +67,7 @@ async function main() {
       isVerified: true,
       bio: 'Teacher from Mysuru',
       avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      createdAt: ago(10),
     },
   });
 
@@ -72,6 +79,7 @@ async function main() {
       displayName: 'Manjunath Gowda',
       isVerified: true,
       bio: 'Farmer from Hassan',
+      createdAt: ago(3),
     },
   });
 
@@ -93,6 +101,7 @@ async function main() {
       description: 'Official Gowda community platform for cultural events and news.',
       category: 'Culture',
       memberCount: 3,
+      createdAt: ago(20),
       members: {
         create: [
           { userId: admin.id, role: CommunityMemberRole.ADMIN },
@@ -110,6 +119,7 @@ async function main() {
       description: 'A group for farmers across Mandya district to share knowledge.',
       category: 'Agriculture',
       memberCount: 2,
+      createdAt: ago(7),
       members: {
         create: [
           { userId: user1.id, role: CommunityMemberRole.ADMIN },
@@ -127,6 +137,7 @@ async function main() {
       content: 'Excited to announce the Gowda Sangha Sammelana 2025! Mark your calendars for July 15th.',
       likesCount: 24,
       commentsCount: 3,
+      createdAt: ago(5),
     },
   });
 
@@ -138,6 +149,7 @@ async function main() {
       mediaType: MediaType.IMAGE,
       likesCount: 15,
       commentsCount: 1,
+      createdAt: ago(2),
     },
   });
 
@@ -148,6 +160,7 @@ async function main() {
       content: 'New seeds available for the rabi season. Farmers, please register at the office.',
       likesCount: 8,
       commentsCount: 0,
+      createdAt: ago(0, 6),
     },
   });
 
@@ -157,6 +170,7 @@ async function main() {
       postId: post1.id,
       authorId: user2.id,
       content: 'Looking forward to it! Will be attending with family.',
+      createdAt: ago(4),
     },
   });
 
@@ -165,6 +179,7 @@ async function main() {
       postId: post2.id,
       authorId: user1.id,
       content: 'Great initiative by the doctors association!',
+      createdAt: ago(1),
     },
   });
 
@@ -176,6 +191,7 @@ async function main() {
       mediaUrl: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=400',
       mediaType: MediaType.IMAGE,
       expiresAt: tomorrow,
+      createdAt: ago(0, 3),
     },
   });
 
@@ -190,6 +206,7 @@ async function main() {
       startsAt: new Date('2025-07-15T10:00:00Z'),
       endsAt: new Date('2025-07-15T18:00:00Z'),
       rsvpCount: 2,
+      createdAt: ago(8),
       rsvps: {
         create: [
           { userId: user1.id, status: 'GOING' },
@@ -201,7 +218,7 @@ async function main() {
 
   console.log('✅ Database seeded successfully!');
   console.log(`
-  📧 Test credentials (all passwords: Password123!):
+  📧 Test credentials (all passwords: Admin@1234):
   - admin@community.app (ADMIN)
   - suresh@community.app
   - ramya@community.app
