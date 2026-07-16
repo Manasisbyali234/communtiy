@@ -7,7 +7,7 @@ const BANNER_HEIGHT = Math.round(SCREEN_WIDTH * 0.48);
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useTheme } from '../../../theme';
-import { useCommunityDetailsQuery, useJoinCommunityMutation } from '../../../api/community';
+import { useCommunityDetailsQuery, useJoinCommunityMutation, usePendingMembersQuery, useApproveMemberMutation, useRejectMemberMutation } from '../../../api/community';
 import { useCommunityPostsQuery } from '../../../api/feed';
 import PostCard from '../../../components/feed/PostCard';
 import CommentSheet from '../../../components/feed/CommentSheet';
@@ -19,7 +19,7 @@ import { useToastStore } from '../../../store/toastStore';
 import { FlashList as ShopifyFlashList } from '@shopify/flash-list';
 const FlashList = ShopifyFlashList as any;
 
-type TabType = 'posts' | 'rules';
+type TabType = 'posts' | 'rules' | 'requests';
 
 export default function CommunityDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,11 +36,19 @@ export default function CommunityDetails() {
   const { data: posts = [], isLoading: isPostsLoading } = useCommunityPostsQuery(id || '');
   const joinMutation = useJoinCommunityMutation();
 
+  const isAdmin = (community as any)?.memberRole === 'ADMIN';
+  const isPrivate = (community as any)?.isPrivate;
+  const { data: pendingMembers = [] } = usePendingMembersQuery(isAdmin && isPrivate ? (id || '') : '');
+  const approveMutation = useApproveMemberMutation();
+  const rejectMutation = useRejectMemberMutation();
+
   const handleJoinToggle = () => {
     if (!community) return;
+    const memberStatus = (community as any).memberStatus;
+    if (memberStatus === 'PENDING') return;
     joinMutation.mutate({ communityId: community.id, isJoined: community.isJoined ?? false });
     showToast(
-      community.isJoined ? 'Left community successfully.' : `Joined ${community.name}!`,
+      community.isJoined ? 'Left community successfully.' : isPrivate ? 'Join request sent!' : `Joined ${community.name}!`,
       'success'
     );
   };
@@ -92,8 +100,8 @@ export default function CommunityDetails() {
           </View>
           {isApproved && (
             <Button
-              title={community.isJoined ? 'Joined' : 'Join Community'}
-              variant={community.isJoined ? 'secondary' : 'gradient'}
+              title={community.isJoined ? 'Joined' : (community as any).memberStatus === 'PENDING' ? 'Pending' : 'Join Community'}
+              variant={community.isJoined || (community as any).memberStatus === 'PENDING' ? 'secondary' : 'gradient'}
               size="sm"
               onPress={handleJoinToggle}
               style={styles.joinBtn}
@@ -173,6 +181,36 @@ export default function CommunityDetails() {
               Rules
             </Text>
           </TouchableOpacity>
+
+          {isAdmin && isPrivate && (
+            <TouchableOpacity
+              onPress={() => setActiveTab('requests')}
+              style={[
+                styles.tab,
+                activeTab === 'requests' && { borderBottomColor: colors.primary },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color: activeTab === 'requests' ? colors.text : colors.textSecondary,
+                      fontSize: typography.sizes.sm,
+                      fontWeight: activeTab === 'requests' ? '700' : '500',
+                    },
+                  ]}
+                >
+                  Requests
+                </Text>
+                {pendingMembers.length > 0 && (
+                  <View style={{ backgroundColor: colors.primary, borderRadius: 10, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                    <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>{pendingMembers.length}</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -180,7 +218,41 @@ export default function CommunityDetails() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {activeTab === 'posts' ? (
+      {activeTab === 'requests' ? (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {renderHeader()}
+          <View style={{ paddingHorizontal: spacing.lg, paddingVertical: 20 }}>
+            <Text style={{ color: colors.text, fontSize: typography.sizes.md, fontWeight: '700', marginBottom: 16 }}>
+              Join Requests ({pendingMembers.length})
+            </Text>
+            {pendingMembers.length === 0 ? (
+              <Text style={{ color: colors.textMuted, fontSize: typography.sizes.sm }}>No pending requests.</Text>
+            ) : (
+              pendingMembers.map((member: any) => (
+                <View key={member.id} style={[styles.requestRow, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                  <Avatar url={member.avatarUrl} name={member.displayName} size={40} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: colors.text, fontWeight: '600', fontSize: typography.sizes.sm }}>{member.displayName}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: typography.sizes.xs }}>@{member.username}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => rejectMutation.mutate({ communityId: id!, userId: member.id }, { onSuccess: () => showToast('Request rejected', 'success') })}
+                    style={[styles.actionBtn, { backgroundColor: colors.inputBg, borderColor: colors.border, marginRight: 8 }]}
+                  >
+                    <Ionicons name="close" size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => approveMutation.mutate({ communityId: id!, userId: member.id }, { onSuccess: () => showToast('Member approved!', 'success') })}
+                    style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+                  >
+                    <Ionicons name="checkmark" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      ) : activeTab === 'posts' ? (
         isPostsLoading ? (
           <View style={{ flex: 1 }}>
             {renderHeader()}
@@ -365,5 +437,21 @@ const styles = StyleSheet.create({
   ruleText: {
     flex: 1,
     fontWeight: '500',
+  },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

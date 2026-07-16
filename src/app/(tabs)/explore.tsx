@@ -18,9 +18,12 @@ import PostCard from '../../components/feed/PostCard';
 import CommentSheet from '../../components/feed/CommentSheet';
 import Skeleton from '../../components/feedback/Skeleton';
 import { useSuggestedUsersQuery, useSearchUsersQuery } from '../../api/user';
-import { useEventsQuery } from '../../api/event';
+import { useEventsQuery, useToggleInterestMutation, useToggleLikeMutation, useShareEventMutation } from '../../api/event';
 import { useSendConnectionRequestMutation, useConnectionStatusQuery, ConnectionStatus } from '../../api/connections';
 import { useAuthStore } from '../../store/authStore';
+import EventCommentSheet from '../../components/feed/EventCommentSheet';
+import EventShareSheet from '../../components/feed/EventShareSheet';
+import { API_BASE_URL } from '../../api/client';
 
 const { width: SW } = Dimensions.get('window');
 const COMM_BANNER_H = Math.round(SW * 0.28);
@@ -164,6 +167,13 @@ export default function ExploreScreen() {
   const members = debouncedSearch ? searchedMembers : suggestedMembers;
   const membersLoading = debouncedSearch ? searchLoading : suggestedLoading;
   const { data: events = [], isLoading: eventsLoading, refetch: refetchEvents } = useEventsQuery();
+  const toggleInterest = useToggleInterestMutation();
+  const toggleLike = useToggleLikeMutation();
+  const shareEvent = useShareEventMutation();
+  const [eventCommentSheetVisible, setEventCommentSheetVisible] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventTitle, setSelectedEventTitle] = useState<string | undefined>();
+  const [shareSheetEvent, setShareSheetEvent] = useState<{ id: string; title: string } | null>(null);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -427,11 +437,47 @@ export default function ExploreScreen() {
     </TouchableOpacity>
   );
 
-  // ── Event Card ─────────────────────────────────────────────────────────────
   const renderEventCard = ({ item }: { item: any }) => {
     const isPast = new Date(item.startsAt) < new Date();
     const dateStr = new Date(item.startsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     const timeStr = new Date(item.startsAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const isInterested = item.isInterested ?? false;
+    const interestedCount = item.interestedCount ?? 0;
+    const isLiked = item.isLiked ?? false;
+    const likesCount = item.likesCount ?? 0;
+    const commentsCount = item.commentsCount ?? 0;
+    const sharesCount = item.sharesCount ?? 0;
+
+    const handleInterest = () => {
+      if (!currentUser) { showToast('Please log in to mark interest', 'error'); return; }
+      if (toggleInterest.isPending) return;
+      toggleInterest.mutate(item.id, {
+        onError: (e: any) => showToast(e?.response?.data?.message || 'Failed to update interest', 'error'),
+      });
+    };
+
+    const handleLike = () => {
+      if (!currentUser) { showToast('Please log in to like', 'error'); return; }
+      if (toggleLike.isPending) return;
+      toggleLike.mutate(item.id, {
+        onError: (e: any) => showToast(e?.response?.data?.message || 'Failed to update like', 'error'),
+      });
+    };
+
+    const handleComment = () => {
+      if (!currentUser) { showToast('Please log in to comment', 'error'); return; }
+      setSelectedEventId(item.id);
+      setSelectedEventTitle(item.title);
+      setEventCommentSheetVisible(true);
+    };
+
+    const handleShare = () => {
+      if (!currentUser) { showToast('Please log in to share', 'error'); return; }
+      shareEvent.mutate(item.id, {
+        onError: (e: any) => showToast(e?.response?.data?.message || 'Failed to track share', 'error'),
+      });
+      setShareSheetEvent({ id: item.id, title: item.title });
+    };
 
     return (
       <View style={[styles.eventCard, { backgroundColor: SURF, borderColor: BORDER }]}>
@@ -466,8 +512,8 @@ export default function ExploreScreen() {
         </View>
 
         <View style={styles.eventBody}>
-          <View style={styles.eventCategoryChip}>
-            <Text style={styles.eventCategoryText}>Event</Text>
+          <View style={[styles.eventCategoryChip, { backgroundColor: colors.primaryContainer }]}>
+            <Text style={[styles.eventCategoryText, { color: colors.primary }]}>Event</Text>
           </View>
           <Text style={[styles.eventTitle, { color: TEXT }]} numberOfLines={2}>{item.title}</Text>
           
@@ -481,21 +527,58 @@ export default function ExploreScreen() {
               {item.location || 'Location TBA'}
             </Text>
           </View>
-          
-          <View style={styles.eventFooter}>
-            <View style={styles.interestedRow}>
-              <Ionicons name="people-circle-outline" size={18} color={G} />
-              <Text style={[styles.interestedText, { color: G }]}>{item.rsvpCount} interested</Text>
-            </View>
-            <TouchableOpacity 
-              style={[
-                styles.registerBtn, 
-                { backgroundColor: item.userRsvpStatus === 'GOING' ? colors.primaryContainer : G }
-              ]}
-              onPress={() => showToast(item.userRsvpStatus === 'GOING' ? 'RSVP Cancelled' : 'Registered successfully!', 'success')}
+
+          {/* Interested button */}
+          <TouchableOpacity
+            style={[styles.rsvpBtn, { backgroundColor: isInterested ? colors.primaryContainer : G }]}
+            onPress={handleInterest}
+            disabled={toggleInterest.isPending}
+          >
+            <Text style={[styles.rsvpBtnText, { color: isInterested ? G : '#FFF' }]}>
+              {isInterested ? '✓ Joined' : 'Join Event'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Social actions: Like | Comment | Share */}
+          <View style={[styles.eventActionsRow, { borderTopColor: BORDER }]}>
+            {/* ❤️ Like */}
+            <TouchableOpacity
+              style={styles.eventActionBtn}
+              onPress={handleLike}
+              disabled={toggleLike.isPending && toggleLike.variables === item.id}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.registerBtnText, { color: item.userRsvpStatus === 'GOING' ? G : '#FFF' }]}>
-                {item.userRsvpStatus === 'GOING' ? 'Registered' : 'RSVP Now'}
+              {toggleLike.isPending && toggleLike.variables === item.id ? (
+                <ActivityIndicator size={14} color="#EF4444" />
+              ) : (
+                <Ionicons
+                  name={isLiked ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={isLiked ? '#EF4444' : TEXT3}
+                />
+              )}
+              <Text style={[styles.eventActionText, { color: isLiked ? '#EF4444' : TEXT3, fontWeight: isLiked ? '700' : '500' }]}>
+                {likesCount > 0 ? likesCount : ''}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.actionDivider, { backgroundColor: BORDER }]} />
+
+            {/* 💬 Comment */}
+            <TouchableOpacity style={styles.eventActionBtn} onPress={handleComment} activeOpacity={0.7}>
+              <Ionicons name="chatbubble-outline" size={19} color={TEXT3} />
+              <Text style={[styles.eventActionText, { color: TEXT3 }]}>
+                {commentsCount > 0 ? commentsCount : ''}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.actionDivider, { backgroundColor: BORDER }]} />
+
+            {/* ↗ Share */}
+            <TouchableOpacity style={styles.eventActionBtn} onPress={handleShare} activeOpacity={0.7}>
+              <Ionicons name="share-social-outline" size={20} color={TEXT3} />
+              <Text style={[styles.eventActionText, { color: TEXT3 }]}>
+                {sharesCount > 0 ? sharesCount : ''}
               </Text>
             </TouchableOpacity>
           </View>
@@ -751,6 +834,22 @@ export default function ExploreScreen() {
         visible={commentSheetVisible}
         onClose={() => setCommentSheetVisible(false)}
       />
+
+      {/* ── Event Comment Sheet ──────────────────────────────────────────── */}
+      <EventCommentSheet
+        eventId={selectedEventId}
+        eventTitle={selectedEventTitle}
+        visible={eventCommentSheetVisible}
+        onClose={() => { setEventCommentSheetVisible(false); setSelectedEventId(null); }}
+      />
+
+      <EventShareSheet
+        visible={!!shareSheetEvent}
+        onClose={() => setShareSheetEvent(null)}
+        eventTitle={shareSheetEvent?.title ?? ''}
+        eventId={shareSheetEvent?.id ?? ''}
+        shareUrl={`${API_BASE_URL.replace('/api/v1', '')}/explore?tab=events&event=${shareSheetEvent?.id ?? ''}`}
+      />
     </View>
   );
 }
@@ -920,7 +1019,7 @@ const styles = StyleSheet.create({
   eventBanner: { width: '100%', height: EVENT_BANNER_H },
   eventBannerOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.25)' },
   dateBadge: {
-    position: 'absolute', left: 14, bottom: -16,
+    position: 'absolute', top: 12, left: 12, zIndex: 10,
     width: 52, height: 52, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
     ...Platform.select({
@@ -935,17 +1034,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
   eventTypeBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '700' },
-  eventBody: { padding: 16, paddingTop: 24 },
+  eventBody: { padding: 16, paddingTop: 16 },
   eventCategoryChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginBottom: 8 },
   eventCategoryText: { fontSize: 11, fontWeight: '700' },
   eventTitle: { fontSize: 17, fontWeight: '800', marginBottom: 10, lineHeight: 22 },
   eventMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   eventMetaText: { fontSize: 13, fontWeight: '400' },
-  eventFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 },
-  interestedRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  interestedText: { fontSize: 13, fontWeight: '500' },
-  registerBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20 },
-  registerBtnText: { fontSize: 13, fontWeight: '700' },
+  eventActionsRow: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 0,
+  },
+  eventActionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, paddingVertical: 8,
+  },
+  actionDivider: { width: StyleSheet.hairlineWidth, height: 18 },
+  eventActionText: { fontSize: 13 },
+  rsvpBtn: { paddingVertical: 11, borderRadius: 24, alignItems: 'center', marginTop: 12 },
+  rsvpBtnText: { fontSize: 14, fontWeight: '700' },
 
   // Skeleton for event
   eventCardSkeleton: { borderRadius: 20, overflow: 'hidden' },

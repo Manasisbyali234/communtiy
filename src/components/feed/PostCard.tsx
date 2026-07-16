@@ -187,22 +187,6 @@ export const PostCard: React.FC<PostCardProps> = React.memo(({ post, onCommentPr
           </View>
         </View>
 
-        {/* Community chip */}
-        {post.community && (
-          <TouchableOpacity
-            onPress={navigateToCommunity}
-            style={[styles.communityChip, {
-              backgroundColor: post.community.isJoined ? colors.primaryContainer : colors.surfaceVariant,
-            }]}
-          >
-            <Text style={[styles.communityChipText, {
-              color: post.community.isJoined ? colors.primaryDark : TEXT3,
-            }]}>
-              {post.community.isJoined ? '● Joined' : 'Join'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
         <View ref={moreBtnRef} collapsable={false}>
           <Pressable 
             style={({ pressed }) => [styles.moreBtn, { opacity: pressed ? 0.5 : 1 }]} 

@@ -27,10 +27,11 @@ export default function CommunitiesDirectory() {
 
   const CATEGORIES = ['All', ...Array.from(new Set(communities.map((c) => c.category).filter(Boolean)))];
 
-  const handleJoinPress = (communityId: string, isJoined: boolean) => {
+  const handleJoinPress = (communityId: string, isJoined: boolean, memberStatus?: string, isPrivate?: boolean) => {
+    if (memberStatus === 'PENDING') return;
     joinMutation.mutate({ communityId, isJoined });
     showToast(
-      isJoined ? 'Left community successfully.' : 'Welcome! You have joined the community.',
+      isJoined ? 'Left community successfully.' : isPrivate ? 'Join request sent! Waiting for approval.' : 'Welcome! You have joined the community.',
       'success'
     );
   };
@@ -80,11 +81,18 @@ export default function CommunitiesDirectory() {
 
         <View style={styles.actionContainer}>
           <Button
-            title={item.isJoined ? 'Joined' : 'Join'}
-            variant={item.isJoined ? 'secondary' : 'gradient'}
+            title={
+              item.memberStatus === 'PENDING'
+                ? 'Pending...'
+                : item.isJoined
+                ? 'Joined'
+                : 'Join'
+            }
+            variant={item.memberStatus === 'PENDING' || item.isJoined ? 'secondary' : 'gradient'}
             size="sm"
-            onPress={() => handleJoinPress(item.id, item.isJoined)}
-            style={styles.joinBtn}
+            onPress={() => handleJoinPress(item.id, item.isJoined, item.memberStatus, item.isPrivate)}
+            disabled={item.memberStatus === 'PENDING'}
+            style={[styles.joinBtn, item.memberStatus === 'PENDING' && { opacity: 0.6 }]}
           />
           <TouchableOpacity
             onPress={() => router.push(`/community/${item.id}`)}

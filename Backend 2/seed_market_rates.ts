@@ -9,6 +9,8 @@ const CROPS = [
       { market: 'Chikmagalur APMC', district: 'Chikmagalur', state: 'Karnataka', variety: 'Arabica', grade: 'A', base: 18000 },
       { market: 'Hassan APMC', district: 'Hassan', state: 'Karnataka', variety: 'Robusta', grade: 'FAQ', base: 15000 },
       { market: 'Kodagu APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Arabica', grade: 'B', base: 17500 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Robusta', grade: 'FAQ', base: 16800 },
+      { market: 'Virajpet APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Arabica', grade: 'A', base: 17200 },
     ],
   },
   {
@@ -17,6 +19,8 @@ const CROPS = [
       { market: 'Wayanad APMC', district: 'Wayanad', state: 'Kerala', variety: 'Malabar', grade: 'FAQ', base: 45000 },
       { market: 'Kozhikode APMC', district: 'Kozhikode', state: 'Kerala', variety: 'Malabar', grade: 'A', base: 46000 },
       { market: 'Kodagu APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Coorg', grade: 'FAQ', base: 44000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Coorg', grade: 'A', base: 43500 },
+      { market: 'Virajpet APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Coorg', grade: 'FAQ', base: 43000 },
     ],
   },
   {
@@ -24,6 +28,7 @@ const CROPS = [
     markets: [
       { market: 'Idukki APMC', district: 'Idukki', state: 'Kerala', variety: 'Green', grade: 'Bold', base: 120000 },
       { market: 'Spices Board Bodinayakanur', district: 'Theni', state: 'Tamil Nadu', variety: 'Green', grade: 'FAQ', base: 115000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Green', grade: 'FAQ', base: 112000 },
     ],
   },
   {
@@ -32,6 +37,8 @@ const CROPS = [
       { market: 'Shimoga APMC', district: 'Shimoga', state: 'Karnataka', variety: 'Rashi', grade: 'FAQ', base: 42000 },
       { market: 'Sirsi APMC', district: 'Uttara Kannada', state: 'Karnataka', variety: 'Rashi', grade: 'A', base: 43500 },
       { market: 'Mangalore APMC', district: 'Dakshina Kannada', state: 'Karnataka', variety: 'Chali', grade: 'FAQ', base: 40000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Rashi', grade: 'FAQ', base: 41000 },
+      { market: 'Virajpet APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Chali', grade: 'FAQ', base: 40500 },
     ],
   },
   {
@@ -39,6 +46,7 @@ const CROPS = [
     markets: [
       { market: 'Tumkur APMC', district: 'Tumkur', state: 'Karnataka', variety: 'Tall', grade: 'FAQ', base: 2800 },
       { market: 'Mandya APMC', district: 'Mandya', state: 'Karnataka', variety: 'Hybrid', grade: 'A', base: 3000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Tall', grade: 'FAQ', base: 2900 },
     ],
   },
   {
@@ -47,6 +55,7 @@ const CROPS = [
       { market: 'Mandya APMC', district: 'Mandya', state: 'Karnataka', variety: 'Sona Masuri', grade: 'FAQ', base: 2200 },
       { market: 'Mysuru APMC', district: 'Mysuru', state: 'Karnataka', variety: 'BPT', grade: 'FAQ', base: 2100 },
       { market: 'Hassan APMC', district: 'Hassan', state: 'Karnataka', variety: 'Sona Masuri', grade: 'A', base: 2300 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Sona Masuri', grade: 'FAQ', base: 2150 },
     ],
   },
   {
@@ -54,6 +63,8 @@ const CROPS = [
     markets: [
       { market: 'Davangere APMC', district: 'Davangere', state: 'Karnataka', variety: 'Robusta', grade: 'A', base: 1800 },
       { market: 'Hubli APMC', district: 'Dharwad', state: 'Karnataka', variety: 'Nendran', grade: 'FAQ', base: 2200 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Nendran', grade: 'A', base: 2100 },
+      { market: 'Virajpet APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Robusta', grade: 'FAQ', base: 1900 },
     ],
   },
   {
@@ -61,6 +72,7 @@ const CROPS = [
     markets: [
       { market: 'Ramanagara APMC', district: 'Ramanagara', state: 'Karnataka', variety: 'Alphonso', grade: 'A', base: 8000 },
       { market: 'Kolar APMC', district: 'Kolar', state: 'Karnataka', variety: 'Totapuri', grade: 'FAQ', base: 5000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Totapuri', grade: 'FAQ', base: 5200 },
     ],
   },
   {
@@ -68,18 +80,21 @@ const CROPS = [
     markets: [
       { market: 'Coonoor APMC', district: 'Nilgiris', state: 'Tamil Nadu', variety: 'CTC', grade: 'BOP', base: 180 },
       { market: 'Munnar APMC', district: 'Idukki', state: 'Kerala', variety: 'Orthodox', grade: 'FBOP', base: 220 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'CTC', grade: 'BOP', base: 175 },
     ],
   },
   {
     name: 'Vanilla',
     markets: [
       { market: 'Thrissur APMC', district: 'Thrissur', state: 'Kerala', variety: 'Planifolia', grade: 'A', base: 40000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Planifolia', grade: 'A', base: 38000 },
     ],
   },
   {
     name: 'Cinnamon',
     markets: [
       { market: 'Kottayam APMC', district: 'Kottayam', state: 'Kerala', variety: 'True', grade: 'FAQ', base: 25000 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'True', grade: 'FAQ', base: 24000 },
     ],
   },
   {
@@ -87,6 +102,8 @@ const CROPS = [
     markets: [
       { market: 'Nagpur APMC', district: 'Nagpur', state: 'Maharashtra', variety: 'Nagpuri', grade: 'A', base: 4500 },
       { market: 'Coorg APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Coorg', grade: 'FAQ', base: 3800 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Coorg', grade: 'A', base: 4000 },
+      { market: 'Virajpet APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Coorg', grade: 'FAQ', base: 3700 },
     ],
   },
   {
@@ -94,6 +111,8 @@ const CROPS = [
     markets: [
       { market: 'Mangalore APMC', district: 'Dakshina Kannada', state: 'Karnataka', variety: 'Local', grade: 'FAQ', base: 1500 },
       { market: 'Udupi APMC', district: 'Udupi', state: 'Karnataka', variety: 'Local', grade: 'A', base: 1800 },
+      { market: 'Madikeri APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Local', grade: 'FAQ', base: 1600 },
+      { market: 'Virajpet APMC', district: 'Kodagu', state: 'Karnataka', variety: 'Local', grade: 'A', base: 1700 },
     ],
   },
 ];

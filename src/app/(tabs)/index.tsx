@@ -347,7 +347,7 @@ export default function HomeFeed() {
           }
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 40, paddingTop: 8 }}
           showsVerticalScrollIndicator={false}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: Platform.OS !== 'web' })}
+          onScroll={(e) => scrollY.setValue(e.nativeEvent.contentOffset.y)}
           scrollEventThrottle={16}
           refreshControl={
             <RefreshControl

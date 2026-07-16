@@ -27,11 +27,21 @@ interface ApiRecord {
   max_price: string;
 }
 
+const STATE_NAME_FIX: Record<string, string> = {
+  'keralam': 'Kerala',
+  'uttarakhand': 'Uttarakhand',
+  'orissa': 'Odisha',
+};
+
+function fixStateName(s: string): string {
+  return STATE_NAME_FIX[s.trim().toLowerCase()] ?? s.trim();
+}
+
 async function fetchAndSyncCrop(crop: string): Promise<number> {
   const url = new URL(`https://api.data.gov.in/resource/${RESOURCE_ID}`);
   url.searchParams.set('api-key', DATA_GOV_API_KEY);
   url.searchParams.set('format', 'json');
-  url.searchParams.set('limit', '100');
+  url.searchParams.set('limit', '500');
   url.searchParams.set('filters[commodity]', crop);
 
   const res = await fetch(url.toString());
@@ -56,7 +66,7 @@ async function fetchAndSyncCrop(crop: string): Promise<number> {
         cropName: r.commodity,
         marketName: r.market,
         district: r.district,
-        state: r.state,
+        state: fixStateName(r.state),
         arrivalDate,
         variety: r.variety || 'Other',
         grade: r.grade || 'FAQ',

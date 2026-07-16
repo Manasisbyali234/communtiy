@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../../api/client';
 import { Skeleton } from '../../components/feedback/Skeleton';
+import { useUserLocation } from '../../hooks/useUserLocation';
 import { useTheme } from '../../theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -227,6 +228,7 @@ export default function CropDetailScreen() {
 
   const name = decodeURIComponent(cropName ?? '');
   const imageSource = CROP_IMAGES[name];
+  const userLocation = useUserLocation();
 
   // ── State ──
   // availableDates: all unique dates from the initial full fetch (for the date strip)
@@ -245,9 +247,27 @@ export default function CropDetailScreen() {
   const [filterState, setFilterState] = useState<string | null>(null);
   const [filterDistrict, setFilterDistrict] = useState<string | null>(null);
   const [showFilter, setShowFilter] = useState(false);
-
   // Abort controller ref to cancel in-flight date fetches
   const abortRef = useRef<AbortController | null>(null);
+
+  // Auto-apply user's state once BOTH location AND dateRecords are ready
+  const locationAppliedRef = useRef(false);
+  useEffect(() => {
+    if (
+      !locationAppliedRef.current &&
+      !userLocation.loading &&
+      userLocation.state &&
+      dateRecords.length > 0
+    ) {
+      locationAppliedRef.current = true;
+      const detectedState = userLocation.state;
+      // Find exact matching state name from actual DB records (case-insensitive)
+      const matchedState = [...new Set(dateRecords.map((r) => r.state))].find(
+        (s) => s.toLowerCase() === detectedState.toLowerCase()
+      );
+      setFilterState(matchedState ?? null);
+    }
+  }, [userLocation.loading, userLocation.state, dateRecords]);
 
   // ── Step 1: Initial load — fetch all records to extract available dates ──
   const fetchAvailableDates = useCallback(async () => {
@@ -321,20 +341,43 @@ export default function CropDetailScreen() {
   // ── Unique states & districts for filter ──
   const allStates = useMemo(() => [...new Set(dateRecords.map((r) => r.state))].sort(), [dateRecords]);
   const allDistricts = useMemo(() => {
-    const base = filterState ? dateRecords.filter((r) => r.state === filterState) : dateRecords;
+    const base = filterState ? dateRecords.filter((r) => r.state.toLowerCase() === filterState.toLowerCase()) : dateRecords;
     return [...new Set(base.map((r) => r.district))].sort();
   }, [dateRecords, filterState]);
 
-  // ── Filtered records ──
+  // ── Haversine distance (km) ──
+  function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // ── Filtered + sorted records (nearby first within state) ──
   const filteredRecords = useMemo(() => {
-    return dateRecords.filter((r) => {
+    const filtered = dateRecords.filter((r) => {
       const q = search.toLowerCase();
       const matchSearch = !q || r.market_name.toLowerCase().includes(q) || r.district.toLowerCase().includes(q) || r.state.toLowerCase().includes(q);
-      const matchState = !filterState || r.state === filterState;
-      const matchDistrict = !filterDistrict || r.district === filterDistrict;
+      const matchState = !filterState || r.state.toLowerCase() === filterState.toLowerCase();
+      const matchDistrict = !filterDistrict || r.district.toLowerCase() === filterDistrict.toLowerCase();
       return matchSearch && matchState && matchDistrict;
     });
-  }, [dateRecords, search, filterState, filterDistrict]);
+
+    // If we have user coords, sort by proximity (approximate — use district name match as tiebreaker)
+    if (userLocation.coords) {
+      const { latitude, longitude } = userLocation.coords;
+      // We don't have market coords, so sort: user's district first, then user's state, then rest by modal_price
+      filtered.sort((a, b) => {
+        const aDistrict = userLocation.district && a.district.toLowerCase().includes(userLocation.district.toLowerCase()) ? 0 : 1;
+        const bDistrict = userLocation.district && b.district.toLowerCase().includes(userLocation.district.toLowerCase()) ? 0 : 1;
+        if (aDistrict !== bDistrict) return aDistrict - bDistrict;
+        return b.modal_price - a.modal_price;
+      });
+      void latitude; void longitude; // suppress unused warning
+    }
+    return filtered;
+  }, [dateRecords, search, filterState, filterDistrict, userLocation.coords, userLocation.district]);
 
   const activeFilterCount = (filterState ? 1 : 0) + (filterDistrict ? 1 : 0);
 
@@ -372,7 +415,15 @@ export default function CropDetailScreen() {
           </View>
           <View>
             <Text style={styles.headerTitle}>{name}</Text>
-            <Text style={styles.headerSub}>All APMC Market Prices</Text>
+            <Text style={styles.headerSub}>
+            {userLocation.loading
+              ? 'Detecting location…'
+              : userLocation.district && userLocation.state
+              ? `${userLocation.district}, ${userLocation.state}`
+              : userLocation.state
+              ? userLocation.state
+              : 'All APMC Market Prices'}
+          </Text>
           </View>
         </View>
         <TouchableOpacity onPress={() => setShowFilter(true)} style={styles.filterIconBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -406,6 +457,29 @@ export default function CropDetailScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* ── Location Banner ── */}
+        {!userLocation.loading && (userLocation.state || userLocation.error) && (
+          <TouchableOpacity
+            onPress={() => setShowFilter(true)}
+            activeOpacity={0.8}
+            style={[styles.locationBanner, { backgroundColor: colors.primaryContainer, borderColor: colors.primary + '40' }]}
+          >
+            <Ionicons
+              name={userLocation.error ? 'location-outline' : 'location'}
+              size={14}
+              color={colors.primary}
+            />
+            <Text style={[styles.locationBannerText, { color: colors.primaryDark }]} numberOfLines={1}>
+              {userLocation.error
+                ? 'Location unavailable — showing all markets'
+                : filterState
+                ? `Filtered: ${filterState}`
+                : `Detected: ${userLocation.state} — tap to filter`}
+            </Text>
+            <Text style={[styles.locationBannerChange, { color: colors.primary }]}>Change</Text>
+          </TouchableOpacity>
+        )}
 
         {/* ── Date Strip ── */}
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -521,10 +595,10 @@ export default function CropDetailScreen() {
               {allStates.map((s) => (
                 <TouchableOpacity
                   key={s}
-                  onPress={() => { setFilterState(filterState === s ? null : s); setFilterDistrict(null); }}
-                  style={[styles.chip, { backgroundColor: filterState === s ? colors.primary : colors.surfaceVariant, borderColor: filterState === s ? colors.primary : colors.border }]}
+                  onPress={() => { setFilterState(filterState?.toLowerCase() === s.toLowerCase() ? null : s); setFilterDistrict(null); }}
+                  style={[styles.chip, { backgroundColor: filterState?.toLowerCase() === s.toLowerCase() ? colors.primary : colors.surfaceVariant, borderColor: filterState?.toLowerCase() === s.toLowerCase() ? colors.primary : colors.border }]}
                 >
-                  <Text style={[styles.chipText, { color: filterState === s ? '#fff' : colors.textSecondary }]}>{s}</Text>
+                  <Text style={[styles.chipText, { color: filterState?.toLowerCase() === s.toLowerCase() ? '#fff' : colors.textSecondary }]}>{s}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -536,10 +610,10 @@ export default function CropDetailScreen() {
               {allDistricts.map((d) => (
                 <TouchableOpacity
                   key={d}
-                  onPress={() => setFilterDistrict(filterDistrict === d ? null : d)}
-                  style={[styles.chip, { backgroundColor: filterDistrict === d ? colors.primary : colors.surfaceVariant, borderColor: filterDistrict === d ? colors.primary : colors.border }]}
+                  onPress={() => setFilterDistrict(filterDistrict?.toLowerCase() === d.toLowerCase() ? null : d)}
+                  style={[styles.chip, { backgroundColor: filterDistrict?.toLowerCase() === d.toLowerCase() ? colors.primary : colors.surfaceVariant, borderColor: filterDistrict?.toLowerCase() === d.toLowerCase() ? colors.primary : colors.border }]}
                 >
-                  <Text style={[styles.chipText, { color: filterDistrict === d ? '#fff' : colors.textSecondary }]}>{d}</Text>
+                  <Text style={[styles.chipText, { color: filterDistrict?.toLowerCase() === d.toLowerCase() ? '#fff' : colors.textSecondary }]}>{d}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -651,6 +725,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
+
+  locationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  locationBannerText: { flex: 1, fontSize: 12, fontWeight: '600' },
+  locationBannerChange: { fontSize: 12, fontWeight: '700' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
   modalSheet: {

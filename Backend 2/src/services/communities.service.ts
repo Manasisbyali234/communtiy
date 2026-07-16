@@ -20,7 +20,7 @@ export const communitiesService = {
         ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { description: { contains: search, mode: 'insensitive' } }] } : {}),
       },
       orderBy: sort === 'popular' ? { memberCount: 'desc' } : { createdAt: 'desc' },
-      include: userId ? { members: { where: { userId, status: CommunityMemberStatus.ACTIVE }, select: { userId: true } } } : undefined,
+      include: userId ? { members: { where: { userId }, select: { userId: true, status: true } } } : undefined,
     });
 
     const page = buildCursorPage(communities as any[], limit);
@@ -28,7 +28,12 @@ export const communitiesService = {
       ...page,
       data: page.data.map((c: any) => {
         const { members, ...rest } = c;
-        return { ...rest, isJoined: userId ? (members?.length ?? 0) > 0 : false };
+        const membership = members?.[0];
+        return {
+          ...rest,
+          isJoined: membership?.status === CommunityMemberStatus.ACTIVE,
+          memberStatus: membership?.status ?? null,
+        };
       }),
     };
   },
@@ -48,15 +53,19 @@ export const communitiesService = {
       },
     });
 
-    // Email admin about new community pending approval
-    const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { email: true } });
-    if (adminUser) {
-      await emailService.sendAdminAlert(
-        adminUser.email,
-        `New Community Pending Approval: "${data.name}"`,
-        `A new community <strong>"${data.name}"</strong> has been submitted and is awaiting your approval.`,
-      ).catch(() => {});
-    }
+    // Email admin about new community pending approval (non-critical — fire-and-forget)
+    prisma.user
+      .findFirst({ where: { role: 'ADMIN' }, select: { email: true } })
+      .then((adminUser) => {
+        if (adminUser) {
+          return emailService.sendAdminAlert(
+            adminUser.email,
+            `New Community Pending Approval: "${data.name}"`,
+            `A new community <strong>"${data.name}"</strong> has been submitted and is awaiting your approval.`,
+          );
+        }
+      })
+      .catch((err) => console.error('[communitiesService.create] Failed to send admin email:', err));
 
     return community;
   },
@@ -126,7 +135,26 @@ export const communitiesService = {
 
     await prisma.communityMember.create({ data: { communityId, userId, status } });
 
-    if (!community.isPrivate) {
+    if (community.isPrivate) {
+      // Notify community admins about the pending join request
+      const admins = await prisma.communityMember.findMany({
+        where: { communityId, role: CommunityMemberRole.ADMIN, status: CommunityMemberStatus.ACTIVE },
+        select: { userId: true },
+      });
+      const joiner = await prisma.user.findUnique({ where: { id: userId }, select: { displayName: true } });
+      for (const admin of admins) {
+        if (admin.userId !== userId) {
+          await notificationsService.create({
+            recipientId: admin.userId,
+            type: 'COMMUNITY_JOIN',
+            actorId: userId,
+            entityId: communityId,
+            entityType: 'CommunityJoinRequest',
+            body: `${joiner?.displayName ?? 'Someone'} requested to join ${community.name}.`,
+          });
+        }
+      }
+    } else {
       await prisma.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } });
 
       // Notify community admins
@@ -177,7 +205,9 @@ export const communitiesService = {
   async approveMember(communityId: string, requesterId: string, targetUserId: string) {
     await this.requireRole(communityId, requesterId, [CommunityMemberRole.ADMIN, CommunityMemberRole.MODERATOR]);
     const member = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId, userId: targetUserId } } });
-    if (!member || member.status !== CommunityMemberStatus.PENDING) throw ApiError.notFound('Pending member not found');
+    if (!member) throw ApiError.notFound('Pending member not found');
+    if (member.status === CommunityMemberStatus.ACTIVE) return; // already approved — idempotent
+    if (member.status !== CommunityMemberStatus.PENDING) throw ApiError.badRequest('Member is not in pending state');
 
     await prisma.$transaction([
       prisma.communityMember.update({
@@ -186,13 +216,36 @@ export const communitiesService = {
       }),
       prisma.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } }),
     ]);
+
+    const community = await prisma.community.findUnique({ where: { id: communityId }, select: { name: true } });
+    await notificationsService.create({
+      recipientId: targetUserId,
+      type: 'COMMUNITY_APPROVED',
+      actorId: requesterId,
+      entityId: communityId,
+      entityType: 'Community',
+      body: `Your request to join ${community?.name ?? 'the community'} was approved!`,
+    });
   },
 
   async rejectMember(communityId: string, requesterId: string, targetUserId: string) {
     await this.requireRole(communityId, requesterId, [CommunityMemberRole.ADMIN, CommunityMemberRole.MODERATOR]);
-    await prisma.communityMember.updateMany({
-      where: { communityId, userId: targetUserId, status: CommunityMemberStatus.PENDING },
+    const member = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId, userId: targetUserId } } });
+    if (!member || member.status !== CommunityMemberStatus.PENDING) return; // already handled — idempotent
+
+    await prisma.communityMember.update({
+      where: { communityId_userId: { communityId, userId: targetUserId } },
       data: { status: CommunityMemberStatus.REJECTED },
+    });
+
+    const community = await prisma.community.findUnique({ where: { id: communityId }, select: { name: true } });
+    await notificationsService.create({
+      recipientId: targetUserId,
+      type: 'COMMUNITY_REJECTED',
+      actorId: requesterId,
+      entityId: communityId,
+      entityType: 'Community',
+      body: `Your request to join ${community?.name ?? 'the community'} was declined.`,
     });
   },
 

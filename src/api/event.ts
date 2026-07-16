@@ -81,6 +81,114 @@ export function useEventsQuery() {
   return { ...query, data: merged };
 }
 
+export function useToggleLikeMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.post<ApiResponse<{ liked: boolean; likesCount: number }>>(`/events/${eventId}/like`);
+      return res.data.data;
+    },
+    onSuccess: (data, eventId) => {
+      queryClient.setQueryData<Event[]>(eventKeys.list(), (old) =>
+        old?.map((e) =>
+          e.id === eventId
+            ? { ...e, isLiked: data.liked, likesCount: data.likesCount }
+            : e
+        ) ?? []
+      );
+    },
+  });
+}
+
+export function useEventCommentsQuery(eventId: string | null) {
+  return useQuery({
+    queryKey: ['eventComments', eventId],
+    enabled: !!eventId,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<PaginatedResponse<any>>>(`/events/${eventId}/comments`);
+      return res.data.data.data ?? [];
+    },
+  });
+}
+
+export function useAddEventCommentMutation(eventId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiClient.post<ApiResponse<any>>(`/events/${eventId}/comments`, { content });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['eventComments', eventId] });
+      queryClient.setQueryData<Event[]>(eventKeys.list(), (old) =>
+        old?.map((e) => e.id === eventId ? { ...e, commentsCount: (e.commentsCount ?? 0) + 1 } : e) ?? []
+      );
+    },
+  });
+}
+
+export function useUpdateEventCommentMutation(eventId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ commentId, content }: { commentId: string; content: string }) => {
+      const res = await apiClient.put<ApiResponse<any>>(`/events/${eventId}/comments/${commentId}`, { content });
+      return res.data.data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['eventComments', eventId] }),
+  });
+}
+
+export function useDeleteEventCommentMutation(eventId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (commentId: string) => {
+      await apiClient.delete(`/events/${eventId}/comments/${commentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['eventComments', eventId] });
+      queryClient.setQueryData<Event[]>(eventKeys.list(), (old) =>
+        old?.map((e) => e.id === eventId ? { ...e, commentsCount: Math.max(0, (e.commentsCount ?? 1) - 1) } : e) ?? []
+      );
+    },
+  });
+}
+
+export function useShareEventMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.post<ApiResponse<{ sharesCount: number }>>(`/events/${eventId}/share`);
+      return res.data.data;
+    },
+    onSuccess: (data, eventId) => {
+      queryClient.setQueryData<Event[]>(eventKeys.list(), (old) =>
+        old?.map((e) => e.id === eventId ? { ...e, sharesCount: data.sharesCount } : e) ?? []
+      );
+    },
+  });
+}
+
+export function useToggleInterestMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      const res = await apiClient.post<ApiResponse<{ interested: boolean; interestedCount: number }>>(`/events/${eventId}/interest`);
+      return res.data.data;
+    },
+    onSuccess: (data, eventId) => {
+      queryClient.setQueryData<Event[]>(eventKeys.list(), (old) =>
+        old?.map((e) =>
+          e.id === eventId
+            ? { ...e, isInterested: data.interested, interestedCount: data.interestedCount }
+            : e
+        ) ?? []
+      );
+    },
+  });
+}
+
 export function useCreateEventMutation() {
   const queryClient = useQueryClient();
 
@@ -93,7 +201,7 @@ export function useCreateEventMutation() {
       endsAt?: string;
       coverUrl?: string;
     }) => {
-      const res = await apiClient.post<ApiResponse<Event>>('/events', payload);
+      const res = await apiClient.post<ApiResponse<Event>>('/events', payload, { timeout: 30000 });
       return normalizeEvent(res.data.data);
     },
     onSuccess: () => {

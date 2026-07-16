@@ -304,8 +304,8 @@ export default function ProfileScreen() {
             <View>
               <Ionicons name="notifications-outline" size={22} color={TEXT} />
               {unreadCount > 0 && (
-                <View style={[styles.bellBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                <View style={[styles.bellBadge, { backgroundColor: colors.secondary }]}>
+                  <Text style={styles.bellBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
                 </View>
               )}
             </View>
@@ -403,8 +403,8 @@ export default function ProfileScreen() {
             style={[styles.btnPrimary, { backgroundColor: G }]}
             onPress={() => router.push('/edit-profile' as any)}
           >
-            <Ionicons name="create-outline" size={18} color="#FFF" />
-            <Text style={styles.btnPrimaryText}>Edit Profile</Text>
+            <Ionicons name="create-outline" size={16} color="#FFF" />
+            <Text style={styles.btnPrimaryText} numberOfLines={1}>Profile</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.btnSecondary, { backgroundColor: SURF, borderColor: BORDER }]} onPress={handleShare}>
             <Ionicons name="share-social-outline" size={18} color={TEXT} />
@@ -510,7 +510,7 @@ export default function ProfileScreen() {
                   <Text style={{ color: TEXT3, fontSize: 15, fontWeight: '600' }}>No events created yet</Text>
                   <TouchableOpacity
                     onPress={() => router.push('/create/event' as any)}
-                    style={[styles.btnPrimary, { backgroundColor: G, paddingHorizontal: 24, flex: 0 }]}
+                    style={[styles.btnPrimary, { backgroundColor: G, paddingHorizontal: 24, flex: 0, minWidth: 140 }]}
                   >
                     <Ionicons name="add" size={16} color="#FFF" />
                     <Text style={styles.btnPrimaryText}>Create Event</Text>
@@ -689,21 +689,25 @@ const styles = StyleSheet.create({
 
   // ── Action Row ─────────────────────────────────────────────────────────────
   actionRow: {
-    flexDirection: 'row', gap: 10,
-    paddingHorizontal: 16, marginBottom: 16,
+    flexDirection: 'row', gap: 8, alignItems: 'center',
+    paddingHorizontal: 16, marginBottom: 16, flexWrap: 'nowrap',
   },
   btnPrimary: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 13, borderRadius: 24, gap: 8,
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 11, paddingHorizontal: 8,
+    borderRadius: 24, gap: 5,
     ...Platform.select({
       ios: { shadowColor: '#2D6A2D', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6 },
       android: { elevation: 4 },
     }),
   },
-  btnPrimaryText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  btnPrimaryText: { color: '#FFF', fontSize: 13, fontWeight: '700', flexShrink: 1, numberOfLines: 1 },
   btnSecondary: {
-    width: 48, height: 48, alignItems: 'center',
-    justifyContent: 'center', borderRadius: 24, borderWidth: 1.5,
+    width: 40, height: 40, alignItems: 'center',
+    justifyContent: 'center', borderRadius: 20, borderWidth: 1.5,
+    flexShrink: 0,
   },
 
   // ── Tab Bar ─────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, Image, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import AdminShell from '../../components/admin/AdminShell';
 import { SearchBar, SectionCard, Skeleton, EmptyState, Pagination, Badge, ActionBtn, TableRow, T, COL, MobileCard, MobileCardRow, IS_MOBILE } from '../../components/admin/AdminUI';
 import { adminApiClient } from '../../api/adminClient';
@@ -43,9 +43,28 @@ export default function AdminUsers() {
   useEffect(() => { setSkip(0); }, [q, filter]);
   useEffect(() => { load(); }, [load]);
 
-  const ban   = async (id: string) => { await adminApiClient.put(`/admin-panel/users/${id}/ban`, { reason: 'Admin action' }); load(); };
-  const unban = async (id: string) => { await adminApiClient.put(`/admin-panel/users/${id}/unban`); load(); };
-  const del   = async (id: string) => { if (!confirm('Delete this user?')) return; await adminApiClient.delete(`/admin-panel/users/${id}`); load(); };
+  const ban = async (id: string) => {
+    try { await adminApiClient.put(`/admin-panel/users/${id}/ban`, { reason: 'Admin action' }); load(); }
+    catch (e: any) { Alert.alert('Error', e?.response?.data?.message ?? 'Failed to ban user'); }
+  };
+  const unban = async (id: string) => {
+    try { await adminApiClient.put(`/admin-panel/users/${id}/unban`); load(); }
+    catch (e: any) { Alert.alert('Error', e?.response?.data?.message ?? 'Failed to unban user'); }
+  };
+  const del = (id: string) => {
+    const doDelete = async () => {
+      try { await adminApiClient.delete(`/admin-panel/users/${id}`); load(); }
+      catch (e: any) { Alert.alert('Error', e?.response?.data?.message ?? 'Failed to delete user'); }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this user?')) doDelete();
+    } else {
+      Alert.alert('Delete User', 'Are you sure?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  };
 
   function renderMobile() {
     if (loading) return <Skeleton rows={6} />;

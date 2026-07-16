@@ -55,6 +55,8 @@ export function useCommunitiesQuery() {
         avatarUrl: toAbsoluteUrl(c.avatarUrl),
         bannerUrl: toAbsoluteUrl(c.bannerUrl),
         isJoined: c.isJoined ?? false,
+        memberStatus: c.memberStatus ?? null,
+        isPrivate: c.isPrivate ?? false,
       }));
     },
   });
@@ -84,22 +86,55 @@ export function useCommunityDetailsQuery(id: string) {
 // Join or leave community mutation
 export function useJoinCommunityMutation() {
   const queryClient = useQueryClient();
-  return useMutation<Community | null, Error, { communityId: string; isJoined: boolean }>({
+  return useMutation<{ status: string } | null, Error, { communityId: string; isJoined: boolean }>({
     mutationFn: async ({ communityId, isJoined }) => {
       try {
         if (isJoined) {
           await apiClient.delete(`/communities/${communityId}/join`);
           return null;
         }
-        const res = await apiClient.post<ApiResponse<Community>>(`/communities/${communityId}/join`);
+        const res = await apiClient.post<ApiResponse<{ status: string }>>(`/communities/${communityId}/join`);
         return res.data.data;
       } catch (e: any) {
-        if (e?.response?.status === 409) return null; // already joined/pending — treat as success
+        if (e?.response?.status === 409) return null;
         throw e;
       }
     },
-    onSuccess: (_data, { communityId }) => {
-      queryClient.invalidateQueries({ queryKey: communityKeys.list() });
+    onMutate: ({ communityId, isJoined }) => {
+      const currentList: any[] = queryClient.getQueryData(communityKeys.list()) ?? [];
+      const community = currentList.find((c) => c.id === communityId);
+      const optimisticStatus = isJoined ? null : community?.isPrivate ? 'PENDING' : 'ACTIVE';
+      const optimisticJoined = !isJoined && !community?.isPrivate;
+
+      queryClient.setQueryData(communityKeys.list(), (old: any[]) =>
+        (old ?? []).map((c) =>
+          c.id === communityId
+            ? { ...c, isJoined: optimisticJoined, memberStatus: optimisticStatus }
+            : c
+        )
+      );
+      queryClient.setQueryData(communityKeys.detail(communityId), (old: any) =>
+        old ? { ...old, isJoined: optimisticJoined, memberStatus: optimisticStatus } : old
+      );
+    },
+    onSuccess: (data, { communityId }) => {
+      // Once we have the real status from server, update cache precisely
+      const realStatus = data?.status ?? null;
+      queryClient.setQueryData(communityKeys.list(), (old: any[]) =>
+        (old ?? []).map((c) =>
+          c.id === communityId
+            ? {
+                ...c,
+                isJoined: realStatus === 'ACTIVE',
+                memberStatus: realStatus,
+              }
+            : c
+        )
+      );
+      // Also patch the detail cache
+      queryClient.setQueryData(communityKeys.detail(communityId), (old: any) =>
+        old ? { ...old, isJoined: realStatus === 'ACTIVE', memberStatus: realStatus } : old
+      );
       queryClient.invalidateQueries({ queryKey: communityKeys.detail(communityId) });
       queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
     },
@@ -115,6 +150,48 @@ export function useCommunityMembersQuery(communityId: string) {
     queryFn: async () => {
       const res = await apiClient.get<ApiResponse<PaginatedResponse<User>>>(`/communities/${communityId}/members`);
       return res.data.data.data;
+    },
+  });
+}
+
+// Fetch pending join requests for a private community (admin only)
+export function usePendingMembersQuery(communityId: string) {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return useQuery<any[]>({
+    queryKey: [...communityKeys.all, 'pending', communityId],
+    enabled: !!communityId && isAuthenticated,
+    staleTime: 0,
+    queryFn: async () => {
+      const res = await apiClient.get<ApiResponse<any[]>>(`/communities/${communityId}/pending`);
+      return res.data.data ?? [];
+    },
+  });
+}
+
+// Approve a pending join request
+export function useApproveMemberMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { communityId: string; userId: string }>({
+    mutationFn: async ({ communityId, userId }) => {
+      await apiClient.post(`/communities/${communityId}/members/${userId}/approve`);
+    },
+    onSuccess: (_data, { communityId }) => {
+      queryClient.invalidateQueries({ queryKey: [...communityKeys.all, 'pending', communityId] });
+      queryClient.invalidateQueries({ queryKey: communityKeys.members(communityId) });
+      queryClient.invalidateQueries({ queryKey: communityKeys.detail(communityId) });
+    },
+  });
+}
+
+// Reject a pending join request
+export function useRejectMemberMutation() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { communityId: string; userId: string }>({
+    mutationFn: async ({ communityId, userId }) => {
+      await apiClient.post(`/communities/${communityId}/members/${userId}/reject`);
+    },
+    onSuccess: (_data, { communityId }) => {
+      queryClient.invalidateQueries({ queryKey: [...communityKeys.all, 'pending', communityId] });
     },
   });
 }

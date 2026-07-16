@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 // Evaluated lazily so it always reflects the current Expo hostUri.
 // Falls back to the fixed LAN IP when running as a standalone/production build.
 const getDevHost = () =>
-  Constants.expoConfig?.hostUri?.split(':')[0] ?? '192.168.68.117';
+  Constants.expoConfig?.hostUri?.split(':')[0] ?? '192.168.68.105';
 
 export const getApiBaseUrl = () => `http://${getDevHost()}:3000/api/v1`;
 export const getSocketUrl = () => `http://${getDevHost()}:3000`;

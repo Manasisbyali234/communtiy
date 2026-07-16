@@ -178,11 +178,8 @@ export function useCreatePostMutation() {
       });
       return res.data.data;
     },
-    onSuccess: (data) => {
-      // Only invalidate community posts if the post is approved (non-community posts are always approved)
-      if (!data.communityId) {
-        queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
-      }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
     },
   });
 }

@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import WeatherWidget from '../components/common/WeatherWidget';
-import { useRef, useState } from 'react';
+import * as Location from 'expo-location';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -25,7 +26,7 @@ import { useTheme } from '../theme';
 
 const SERVICES = [
   { id: 'tractor',    icon: 'construct-outline',     label: 'Traction',                   color: '#F57F17' },
-  { id: 'ledger',     icon: 'book-outline',          label: 'Add Ledger',                 color: '#00695C' },
+  { id: 'pesticide',  icon: 'flask-outline',         label: 'Pesticide Calc',             color: '#00695C' },
   { id: 'price',      icon: 'calculator-outline',    label: 'Price Calculator',           color: '#6A1B9A' },
   { id: 'market',     icon: 'trending-up-outline',   label: 'Market Rates',               color: '#C62828' },
 ];
@@ -48,7 +49,32 @@ export default function KrushiMitraScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const [search, setSearch] = useState('');
   const scrollY = useRef(new Animated.Value(0)).current;
+  const [showTraction, setShowTraction] = useState(false);
+  const [tractorType, setTractorType] = useState<'Mini' | '2WD' | '4WD'>('2WD');
+  const [tractorArea, setTractorArea] = useState('');
+  const [tractorDate, setTractorDate] = useState('');
+  const [tractorNotes, setTractorNotes] = useState('');
+  const [tractionBooked, setTractionBooked] = useState(false);
+  const resetTraction = () => { setTractorArea(''); setTractorDate(''); setTractorNotes(''); setTractionBooked(false); };
+  const bookTraction = () => { if (tractorArea && tractorDate) setTractionBooked(true); };
   const [showCalc, setShowCalc] = useState(false);
+  const [showPesticideCalc, setShowPesticideCalc] = useState(false);
+  const [pesticideArea, setPesticideArea] = useState('');
+  const [pesticideDose, setPesticideDose] = useState('');
+  const [pesticideWater, setPesticideWater] = useState('');
+  const [pesticideUnit, setPesticideUnit] = useState<'ml' | 'g'>('ml');
+  const [pesticideResult, setPesticideResult] = useState<{ qty: string; water: string } | null>(null);
+  const resetPesticide = () => { setPesticideArea(''); setPesticideDose(''); setPesticideWater(''); setPesticideResult(null); };
+  const calcPesticide = () => {
+    const area = parseFloat(pesticideArea) || 0;
+    const dose = parseFloat(pesticideDose) || 0;
+    const water = parseFloat(pesticideWater) || 0;
+    if (area <= 0 || dose <= 0) return;
+    setPesticideResult({
+      qty: (area * dose).toFixed(2),
+      water: water > 0 ? (area * water).toFixed(2) : '',
+    });
+  };
   const [quantity, setQuantity] = useState('');
   const [ratePerUnit, setRatePerUnit] = useState('');
   const [extraKg, setExtraKg] = useState('');
@@ -64,6 +90,62 @@ export default function KrushiMitraScreen() {
   const hasResult = qty > 0 && rate > 0;
   const resetCalc = () => { setQuantity(''); setRatePerUnit(''); setExtraKg(''); setExtraKgRate(''); };
 
+  // ── Weather summary for Welcome card ────────────────────────────────────
+  type WForecastDay = { day: string; icon: string; tempMax: number; tempMin: number; rain: number };
+  const [welcomeWeather, setWelcomeWeather] = useState<{ temp: number; condition: string; icon: string } | null>(null);
+  const [welcomeForecast, setWelcomeForecast] = useState<WForecastDay[]>([]);
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function codeToMeta(code: number) {
+    if (code === 800) return { condition: 'Clear Sky', icon: 'sunny-outline' };
+    if (code <= 802)  return { condition: 'Partly Cloudy', icon: 'partly-sunny-outline' };
+    if (code >= 803)  return { condition: 'Overcast', icon: 'cloudy-outline' };
+    if (code >= 500)  return { condition: 'Rain', icon: 'rainy-outline' };
+    if (code >= 200)  return { condition: 'Thunderstorm', icon: 'thunderstorm-outline' };
+    return { condition: 'Cloudy', icon: 'cloudy-outline' };
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') throw new Error('no permission');
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const { latitude: lat, longitude: lon } = loc.coords;
+        const API_KEY = 'YOUR_WEATHERBIT_API_KEY';
+
+        const [curRes, fcRes] = await Promise.all([
+          fetch(`https://api.weatherbit.io/v2.0/current?lat=${lat}&lon=${lon}&key=${API_KEY}&units=M`),
+          fetch(`https://api.weatherbit.io/v2.0/forecast/daily?lat=${lat}&lon=${lon}&key=${API_KEY}&units=M&days=3`),
+        ]);
+        if (!curRes.ok || !fcRes.ok) throw new Error('api error');
+
+        const curData = await curRes.json();
+        const c = curData.data[0];
+        const { condition, icon } = codeToMeta(c.weather.code);
+        setWelcomeWeather({ temp: Math.round(c.temp), condition, icon });
+
+        const fcData = await fcRes.json();
+        setWelcomeForecast(
+          fcData.data.map((d: any, i: number) => ({
+            day: i === 0 ? 'Today' : DAY_NAMES[new Date(d.datetime).getDay()],
+            icon: codeToMeta(d.weather.code).icon,
+            tempMax: Math.round(d.max_temp),
+            tempMin: Math.round(d.min_temp),
+            rain: Math.round(d.pop ?? 0),
+          }))
+        );
+      } catch {
+        setWelcomeWeather({ temp: 28, condition: 'Partly Cloudy', icon: 'partly-sunny-outline' });
+        setWelcomeForecast([
+          { day: 'Today',    icon: 'partly-sunny-outline', tempMax: 31, tempMin: 22, rain: 20 },
+          { day: 'Tomorrow', icon: 'rainy-outline',        tempMax: 27, tempMin: 20, rain: 65 },
+          { day: 'Day 3',    icon: 'sunny-outline',        tempMax: 33, tempMin: 23, rain: 5  },
+        ]);
+      }
+    })();
+  }, []);
+
   const filteredServices = SERVICES.filter((s) =>
     s.label.toLowerCase().includes(search.toLowerCase())
   );
@@ -77,30 +159,60 @@ export default function KrushiMitraScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.welcomeCard}
     >
-      {/* Decorative circles */}
       <View style={styles.wCircle1} />
       <View style={styles.wCircle2} />
 
-      <View style={styles.welcomeLeft}>
-        <Text style={styles.welcomeTitle}>Welcome to{'\n'}Krushi Mitra</Text>
-        <Text style={styles.welcomeSub}>Your Digital Farming Assistant</Text>
-        <View style={styles.welcomeBadge}>
-          <Ionicons name="shield-checkmark" size={12} color="#FFF" />
-          <Text style={styles.welcomeBadgeText}>Govt. Verified</Text>
+      {/* Top row: text left, current weather right */}
+      <View style={styles.welcomeTopRow}>
+        <View style={styles.welcomeLeft}>
+          <Text style={styles.welcomeTitle}>Welcome to{'\n'}Krushi Mitra</Text>
+          <Text style={styles.welcomeSub}>Your Digital Farming Assistant</Text>
+          <View style={styles.welcomeBadge}>
+            <Ionicons name="shield-checkmark" size={12} color="#FFF" />
+            <Text style={styles.welcomeBadgeText}>Govt. Verified</Text>
+          </View>
+        </View>
+
+        <View style={styles.welcomeRight}>
+          {welcomeWeather ? (
+            <View style={styles.weatherBubble}>
+              <Ionicons name={welcomeWeather.icon as any} size={32} color="#FFD54F" />
+              <Text style={styles.weatherTemp}>{welcomeWeather.temp}°C</Text>
+              <Text style={styles.weatherCond}>{welcomeWeather.condition}</Text>
+            </View>
+          ) : (
+            <View style={styles.farmIllustration}>
+              <Ionicons name="leaf" size={44} color="rgba(255,255,255,0.9)" />
+              <View style={styles.farmIconRow}>
+                <Ionicons name="sunny" size={20} color="#FFD54F" />
+                <Ionicons name="water" size={20} color="#81D4FA" style={{ marginLeft: 6 }} />
+              </View>
+            </View>
+          )}
         </View>
       </View>
 
-      <View style={styles.welcomeRight}>
-        <View style={styles.farmIllustration}>
-          <Ionicons name="leaf" size={44} color="rgba(255,255,255,0.9)" />
-          <View style={styles.farmIconRow}>
-            <Ionicons name="sunny" size={20} color="#FFD54F" />
-            <Ionicons name="water" size={20} color="#81D4FA" style={{ marginLeft: 6 }} />
-          </View>
+      {/* Forecast strip */}
+      {welcomeForecast.length > 0 && (
+        <View style={styles.forecastStrip}>
+          {welcomeForecast.map((d, i) => (
+            <View key={i} style={[styles.forecastStripItem, i < welcomeForecast.length - 1 && styles.forecastStripBorder]}>
+              <Text style={styles.forecastStripDay}>{d.day}</Text>
+              <Ionicons name={d.icon as any} size={18} color="#FFD54F" style={{ marginVertical: 3 }} />
+              <Text style={styles.forecastStripTemps}>{d.tempMax}° / {d.tempMin}°</Text>
+              <View style={styles.forecastStripRain}>
+                <Ionicons name="rainy-outline" size={10} color="rgba(255,255,255,0.75)" />
+                <Text style={styles.forecastStripRainText}>{d.rain}%</Text>
+              </View>
+            </View>
+          ))}
         </View>
-      </View>
+      )}
     </LinearGradient>
   );
+
+  const cardSize = Math.min(120, (screenWidth - 32 - 12 * 3) / 3.5);
+  const iconSize = Math.min(52, cardSize * 0.6);
 
   const ServicesSection = (
     <View style={{ marginBottom: 20 }}>
@@ -110,14 +222,16 @@ export default function KrushiMitraScreen() {
           <TouchableOpacity
             key={service.id}
             activeOpacity={0.75}
-            style={[styles.serviceCard, { backgroundColor: colors.surface }]}
+            style={[styles.serviceCard, { backgroundColor: colors.surface, width: cardSize, padding: 12 }]}
             onPress={() => {
-              if (service.id === 'price') setShowCalc(true);
+              if (service.id === 'tractor') setShowTraction(true);
+              else if (service.id === 'price') setShowCalc(true);
+              else if (service.id === 'pesticide') setShowPesticideCalc(true);
               else if (service.id === 'market') router.push('/market-rates' as any);
             }}
           >
-            <View style={[styles.serviceIconWrap, { backgroundColor: service.color + '18' }]}>
-              <Ionicons name={service.icon as any} size={26} color={service.color} />
+            <View style={[styles.serviceIconWrap, { backgroundColor: service.color + '18', width: iconSize, height: iconSize, borderRadius: iconSize * 0.25 }]}>
+              <Ionicons name={service.icon as any} size={iconSize * 0.5} color={service.color} />
             </View>
             <Text style={[styles.serviceLabel, { color: colors.text }]}>{service.label}</Text>
           </TouchableOpacity>
@@ -167,10 +281,16 @@ export default function KrushiMitraScreen() {
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.85}
-            style={styles.schemeCardNew}
+            style={[styles.schemeCardNew, { width: cardSize, padding: 12 }]}
+            onPress={() => {
+              if (item.id === 'pmkisan') Linking.openURL('https://pmkisan.gov.in/');
+              else if (item.id === 'shc') Linking.openURL('https://soilhealth.dac.gov.in/home');
+              else if (item.id === 'pmfby') Linking.openURL('https://pmfby.gov.in/');
+              else if (item.id === 'kcc') Linking.openURL('https://www.myscheme.gov.in/schemes/kcc');
+            }}
           >
-            <View style={[styles.schemeIconWrapNew, { backgroundColor: item.bg }]}>
-              <Ionicons name={item.icon as any} size={34} color={item.color} />
+            <View style={[styles.schemeIconWrapNew, { backgroundColor: item.bg, width: iconSize, height: iconSize, borderRadius: iconSize * 0.25 }]}>
+              <Ionicons name={item.icon as any} size={iconSize * 0.5} color={item.color} />
             </View>
             <Text style={styles.schemeLabelNew}>{item.label}</Text>
           </TouchableOpacity>
@@ -260,7 +380,6 @@ export default function KrushiMitraScreen() {
     { key: 'services' },
     { key: 'seasonal' },
     { key: 'schemes' },
-    { key: 'weather' },
   ];
 
   const renderItem = ({ item }: { item: { key: string } }) => {
@@ -269,7 +388,6 @@ export default function KrushiMitraScreen() {
       case 'services':  return ServicesSection;
       case 'seasonal':  return SeasonalAdvisory;
       case 'schemes':   return GovernmentSchemes;
-      case 'weather':   return <View style={{ marginTop: 24 }}><WeatherWidget /></View>;
       default:          return null;
     }
   };
@@ -307,7 +425,298 @@ export default function KrushiMitraScreen() {
         )}
       </View>
 
+      {/* Traction Booking Modal */}
+      <Modal visible={showTraction} transparent animationType="slide" onRequestClose={() => { setShowTraction(false); resetTraction(); }}>
+        <TouchableWithoutFeedback onPress={() => { setShowTraction(false); resetTraction(); }}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalSheet}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconWrap, { backgroundColor: '#F57F1718' }]}>
+                <Ionicons name="construct-outline" size={22} color="#F57F17" />
+              </View>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Book Traction</Text>
+              <TouchableOpacity onPress={() => { setShowTraction(false); resetTraction(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {tractionBooked ? (
+              /* ── Confirmation screen ── */
+              <View style={styles.tractionConfirm}>
+                <View style={styles.tractionConfirmIcon}>
+                  <Ionicons name="checkmark-circle" size={64} color="#F57F17" />
+                </View>
+                <Text style={[styles.tractionConfirmTitle, { color: colors.text }]}>Booking Confirmed!</Text>
+                <Text style={[styles.tractionConfirmSub, { color: colors.textSecondary }]}>
+                  Your {tractorType} tractor has been booked for {tractorDate} on {tractorArea} acres.
+                </Text>
+                <View style={[styles.tractionConfirmCard, { backgroundColor: '#FFF8E1', borderColor: '#F57F1740' }]}>
+                  <View style={styles.tractionConfirmRow}>
+                    <Ionicons name="construct-outline" size={16} color="#F57F17" />
+                    <Text style={styles.tractionConfirmLabel}>Tractor Type</Text>
+                    <Text style={styles.tractionConfirmValue}>{tractorType}</Text>
+                  </View>
+                  <View style={[styles.divider, { backgroundColor: '#F57F1720' }]} />
+                  <View style={styles.tractionConfirmRow}>
+                    <Ionicons name="map-outline" size={16} color="#F57F17" />
+                    <Text style={styles.tractionConfirmLabel}>Area</Text>
+                    <Text style={styles.tractionConfirmValue}>{tractorArea} acres</Text>
+                  </View>
+                  <View style={[styles.divider, { backgroundColor: '#F57F1720' }]} />
+                  <View style={styles.tractionConfirmRow}>
+                    <Ionicons name="calendar-outline" size={16} color="#F57F17" />
+                    <Text style={styles.tractionConfirmLabel}>Date</Text>
+                    <Text style={styles.tractionConfirmValue}>{tractorDate}</Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.calcBtn, { backgroundColor: '#F57F17', marginTop: 8 }]}
+                  onPress={() => { setShowTraction(false); resetTraction(); }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="checkmark-outline" size={18} color="#FFF" />
+                  <Text style={styles.calcBtnText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* ── Booking form ── */
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={[styles.calcCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+
+                  {/* Tractor type selector */}
+                  <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Tractor Type</Text>
+                    <View style={styles.tractionTypeRow}>
+                      {(['Mini', '2WD', '4WD'] as const).map((t) => (
+                        <TouchableOpacity
+                          key={t}
+                          onPress={() => setTractorType(t)}
+                          style={[styles.tractionTypeBtn, { borderColor: tractorType === t ? '#F57F17' : colors.border, backgroundColor: tractorType === t ? '#FFF8E1' : colors.surface }]}
+                        >
+                          <Ionicons name="construct-outline" size={18} color={tractorType === t ? '#F57F17' : colors.textMuted} />
+                          <Text style={[styles.tractionTypeBtnText, { color: tractorType === t ? '#F57F17' : colors.textSecondary }]}>{t}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Area */}
+                  <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Field Area (acres)</Text>
+                    <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <Ionicons name="map-outline" size={16} color={colors.textMuted} />
+                      <TextInput
+                        style={[styles.calcInput, { color: colors.text }]}
+                        placeholder="e.g. 3"
+                        placeholderTextColor={colors.textMuted}
+                        keyboardType="numeric"
+                        value={tractorArea}
+                        onChangeText={setTractorArea}
+                      />
+                      <Text style={[styles.affix, { color: colors.textMuted }]}>acres</Text>
+                    </View>
+                  </View>
+
+                  {/* Date */}
+                  <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Preferred Date</Text>
+                    <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
+                      <TextInput
+                        style={[styles.calcInput, { color: colors.text }]}
+                        placeholder="DD/MM/YYYY"
+                        placeholderTextColor={colors.textMuted}
+                        value={tractorDate}
+                        onChangeText={setTractorDate}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Notes */}
+                  <View style={styles.fieldWrap}>
+                    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Notes <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text></Text>
+                    <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'flex-start', paddingVertical: 10 }]}>
+                      <Ionicons name="create-outline" size={16} color={colors.textMuted} style={{ marginTop: 2 }} />
+                      <TextInput
+                        style={[styles.calcInput, { color: colors.text, minHeight: 56 }]}
+                        placeholder="Any special instructions..."
+                        placeholderTextColor={colors.textMuted}
+                        multiline
+                        value={tractorNotes}
+                        onChangeText={setTractorNotes}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.calcBtn, { backgroundColor: '#F57F17', opacity: tractorArea && tractorDate ? 1 : 0.45 }]}
+                  onPress={bookTraction}
+                  activeOpacity={0.8}
+                  disabled={!tractorArea || !tractorDate}
+                >
+                  <Ionicons name="construct-outline" size={18} color="#FFF" />
+                  <Text style={styles.calcBtnText}>Book Tractor</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {PriceCalculatorModal}
+
+      {/* Pesticide Calculator Modal */}
+      <Modal visible={showPesticideCalc} transparent animationType="slide" onRequestClose={() => setShowPesticideCalc(false)}>
+        <TouchableWithoutFeedback onPress={() => setShowPesticideCalc(false)}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalSheet}>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={[styles.modalHandle, { backgroundColor: colors.border }]} />
+
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIconWrap, { backgroundColor: '#00695C18' }]}>
+                <Ionicons name="flask-outline" size={22} color="#00695C" />
+              </View>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Pesticide Calculator</Text>
+              <TouchableOpacity onPress={() => { setShowPesticideCalc(false); resetPesticide(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={[styles.calcCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+
+                {/* Field Area */}
+                <View style={styles.fieldWrap}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Field Area (acres)</Text>
+                  <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="map-outline" size={16} color={colors.textMuted} />
+                    <TextInput
+                      style={[styles.calcInput, { color: colors.text }]}
+                      placeholder="e.g. 2"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numeric"
+                      value={pesticideArea}
+                      onChangeText={(v) => { setPesticideArea(v); setPesticideResult(null); }}
+                    />
+                    <Text style={[styles.affix, { color: colors.textMuted }]}>acres</Text>
+                  </View>
+                </View>
+
+                {/* Dose with unit toggle */}
+                <View style={styles.fieldWrap}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Pesticide Dose per acre</Text>
+                  <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="flask-outline" size={16} color={colors.textMuted} />
+                    <TextInput
+                      style={[styles.calcInput, { color: colors.text }]}
+                      placeholder="e.g. 200"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numeric"
+                      value={pesticideDose}
+                      onChangeText={(v) => { setPesticideDose(v); setPesticideResult(null); }}
+                    />
+                    {/* ml / g toggle */}
+                    <View style={styles.unitToggle}>
+                      {(['ml', 'g'] as const).map((u) => (
+                        <TouchableOpacity
+                          key={u}
+                          onPress={() => { setPesticideUnit(u); setPesticideResult(null); }}
+                          style={[styles.unitBtn, pesticideUnit === u && { backgroundColor: '#00695C' }]}
+                        >
+                          <Text style={[styles.unitBtnText, pesticideUnit === u && { color: '#FFF' }]}>{u}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Water */}
+                <View style={styles.fieldWrap}>
+                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Water per acre (litres) <Text style={{ fontWeight: '400', fontSize: 11 }}>(optional)</Text></Text>
+                  <View style={[styles.inputRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Ionicons name="water-outline" size={16} color={colors.textMuted} />
+                    <TextInput
+                      style={[styles.calcInput, { color: colors.text }]}
+                      placeholder="e.g. 200"
+                      placeholderTextColor={colors.textMuted}
+                      keyboardType="numeric"
+                      value={pesticideWater}
+                      onChangeText={(v) => { setPesticideWater(v); setPesticideResult(null); }}
+                    />
+                    <Text style={[styles.affix, { color: colors.textMuted }]}>L</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Calculate button */}
+              <TouchableOpacity
+                style={[styles.calcBtn, { backgroundColor: '#00695C', opacity: pesticideArea && pesticideDose ? 1 : 0.45 }]}
+                onPress={calcPesticide}
+                activeOpacity={0.8}
+                disabled={!pesticideArea || !pesticideDose}
+              >
+                <Ionicons name="calculator-outline" size={18} color="#FFF" />
+                <Text style={styles.calcBtnText}>Calculate</Text>
+              </TouchableOpacity>
+
+              {/* Result */}
+              {pesticideResult && (
+                <View style={[styles.resultCard, { backgroundColor: '#E8F5E9', borderColor: '#00695C40' }]}>
+                  <Text style={[styles.resultTitle, { color: '#00695C' }]}>Result</Text>
+
+                  <View style={styles.pesticideResultRow}>
+                    <View style={[styles.pesticideResultIcon, { backgroundColor: '#00695C18' }]}>
+                      <Ionicons name="flask" size={20} color="#00695C" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.summaryLabel, { color: '#555' }]}>Total Pesticide Needed</Text>
+                      <Text style={[styles.pesticideResultValue, { color: '#00695C' }]}>
+                        {pesticideResult.qty} {pesticideUnit}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {pesticideResult.water ? (
+                    <>
+                      <View style={[styles.divider, { backgroundColor: '#00695C30' }]} />
+                      <View style={styles.pesticideResultRow}>
+                        <View style={[styles.pesticideResultIcon, { backgroundColor: '#0288D118' }]}>
+                          <Ionicons name="water" size={20} color="#0288D1" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.summaryLabel, { color: '#555' }]}>Total Water Needed</Text>
+                          <Text style={[styles.pesticideResultValue, { color: '#0288D1' }]}>
+                            {pesticideResult.water} L
+                          </Text>
+                        </View>
+                      </View>
+                    </>
+                  ) : null}
+
+                  <View style={[styles.pesticideHint, { backgroundColor: '#00695C10' }]}>
+                    <Ionicons name="information-circle-outline" size={14} color="#00695C" />
+                    <Text style={styles.pesticideHintText}>Always follow label instructions. Wear protective gear.</Text>
+                  </View>
+                </View>
+              )}
+
+              {(pesticideArea || pesticideDose || pesticideWater) ? (
+                <TouchableOpacity style={[styles.resetBtn, { borderColor: colors.border }]} onPress={resetPesticide} activeOpacity={0.7}>
+                  <Ionicons name="refresh-outline" size={16} color={colors.textMuted} />
+                  <Text style={[styles.resetText, { color: colors.textMuted }]}>Reset</Text>
+                </TouchableOpacity>
+              ) : null}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Content */}
       <FlatList
@@ -363,14 +772,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     overflow: 'hidden',
     ...Platform.select({
       ios: { shadowColor: '#1B5E20', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
       android: { elevation: 6 },
     }),
   },
+  welcomeTopRow: { flexDirection: 'row', alignItems: 'center' },
   wCircle1: {
     position: 'absolute', width: 120, height: 120, borderRadius: 60,
     backgroundColor: 'rgba(255,255,255,0.07)', top: -30, right: 60,
@@ -391,6 +800,31 @@ const styles = StyleSheet.create({
   welcomeRight: { marginLeft: 12 },
   farmIllustration: { alignItems: 'center', gap: 6 },
   farmIconRow: { flexDirection: 'row', alignItems: 'center' },
+  weatherBubble: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  weatherTemp: { color: '#FFF', fontSize: 20, fontWeight: '900', lineHeight: 24 },
+  weatherCond: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '600', textAlign: 'center' },
+
+  // Forecast strip inside Welcome card
+  forecastStrip: {
+    flexDirection: 'row',
+    marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14,
+    paddingVertical: 10,
+  },
+  forecastStripItem: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  forecastStripBorder: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.2)' },
+  forecastStripDay: { color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: '700' },
+  forecastStripTemps: { color: '#FFF', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  forecastStripRain: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
+  forecastStripRainText: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '600' },
 
   // Section Title
   sectionTitle: { fontSize: 15, fontWeight: '700', letterSpacing: -0.2, marginBottom: 12 },
@@ -510,4 +944,38 @@ const styles = StyleSheet.create({
   totalValue: { fontSize: 20, fontWeight: '900' },
   resetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, marginBottom: 8 },
   resetText: { fontSize: 13, fontWeight: '600' },
+
+  // Pesticide Calculator
+  unitToggle: { flexDirection: 'row', borderRadius: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#00695C40' },
+  unitBtn: { paddingHorizontal: 10, paddingVertical: 5 },
+  unitBtnText: { fontSize: 12, fontWeight: '700', color: '#00695C' },
+  calcBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 14, borderRadius: 14, marginBottom: 14,
+  },
+  calcBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  pesticideResultRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pesticideResultIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  pesticideResultValue: { fontSize: 22, fontWeight: '900', marginTop: 2 },
+  pesticideHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 10, padding: 10, borderRadius: 10,
+  },
+  pesticideHintText: { fontSize: 11, color: '#00695C', flex: 1, lineHeight: 16 },
+
+  // Traction Booking
+  tractionTypeRow: { flexDirection: 'row', gap: 10 },
+  tractionTypeBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5,
+  },
+  tractionTypeBtnText: { fontSize: 13, fontWeight: '700' },
+  tractionConfirm: { alignItems: 'center', paddingVertical: 8, paddingBottom: 16 },
+  tractionConfirmIcon: { marginBottom: 12 },
+  tractionConfirmTitle: { fontSize: 20, fontWeight: '900', marginBottom: 6 },
+  tractionConfirmSub: { fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 16, paddingHorizontal: 8 },
+  tractionConfirmCard: { width: '100%', borderRadius: 14, borderWidth: 1, padding: 14, gap: 10, marginBottom: 8 },
+  tractionConfirmRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tractionConfirmLabel: { flex: 1, fontSize: 13, color: '#888' },
+  tractionConfirmValue: { fontSize: 13, fontWeight: '700', color: '#F57F17' },
 });

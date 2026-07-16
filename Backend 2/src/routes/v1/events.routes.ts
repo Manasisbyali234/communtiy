@@ -35,5 +35,12 @@ router.delete('/:id', eventsController.delete);
 router.post('/:id/rsvp', validate({ body: RsvpSchema }), eventsController.rsvp);
 router.delete('/:id/rsvp', eventsController.cancelRsvp);
 router.get('/:id/attendees', eventsController.getAttendees);
+router.post('/:id/interest', eventsController.toggleInterest);
+router.post('/:id/like', eventsController.toggleLike);
+router.post('/:id/share', eventsController.shareEvent);
+router.get('/:id/comments', eventsController.getComments);
+router.post('/:id/comments', validate({ body: z.object({ content: z.string().min(1).max(1000) }) }), eventsController.addComment);
+router.put('/:id/comments/:commentId', validate({ body: z.object({ content: z.string().min(1).max(1000) }) }), eventsController.updateComment);
+router.delete('/:id/comments/:commentId', eventsController.deleteComment);
 
 export default router;

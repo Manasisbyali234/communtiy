@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, View, Platform } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
 
 interface VideoPostPlayerProps {
   url: string;
@@ -27,6 +26,8 @@ export const VideoPostPlayer: React.FC<VideoPostPlayerProps> = ({ url }) => {
       </View>
     );
   }
+
+  const { Video, ResizeMode } = require('expo-av');
 
   return (
     <View style={styles.container}>

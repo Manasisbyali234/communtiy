@@ -307,7 +307,7 @@ export default function CreateEvent() {
       formData.append('file', { uri, name: filename, type: mimeType } as any);
     }
 
-    const res = await apiClient.post('/media/upload-event', formData);
+    const res = await apiClient.post('/media/upload-event', formData, { timeout: 60000 });
     const uploadedUrl = res.data.data.url as string;
     console.log('[uploadBanner] upload response url:', uploadedUrl);
     return uploadedUrl;
@@ -352,8 +352,11 @@ export default function CreateEvent() {
     try {
       await createEvent.mutateAsync(payload);
       setSubmitted(true);
-    } catch {
-      showToast('Failed to submit event. Please try again.', 'error');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Unknown error';
+      const errors = err?.response?.data?.errors;
+      console.error('[CreateEvent] submit error:', err?.response?.status, msg, errors);
+      showToast(`Failed: ${msg}`, 'error');
     }
   };
 

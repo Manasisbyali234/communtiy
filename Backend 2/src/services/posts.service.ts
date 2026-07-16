@@ -82,9 +82,9 @@ export const postsService = {
         OR: [
           { authorId: { in: followingIds }, communityId: null },
           { communityId: { in: communityIds }, status: 'APPROVED' as any },
-          { authorId: userId, communityId: null },
+          { authorId: userId },
         ],
-        authorId: { notIn: blockedIds },
+        NOT: { authorId: { in: blockedIds } },
       },
       select: POST_SELECT,
       orderBy: { createdAt: 'desc' },
@@ -117,7 +117,7 @@ export const postsService = {
     }
 
     const { tags: _tags, mediaType, ...postData } = data;
-    const postStatus = data.communityId ? 'PENDING_APPROVAL' : 'APPROVED';
+    const postStatus = 'APPROVED';
     const post = await prisma.post.create({
       data: {
         authorId,

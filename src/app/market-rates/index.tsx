@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { useUserLocation } from '../../hooks/useUserLocation';
 import {
   Image,
   Platform,
@@ -16,11 +17,11 @@ import { useTheme } from '../../theme';
 
 const CROPS = [
   { id: 'coffee',      name: 'Coffee',       image: require('../../../assets/images/crops/coffee.jpg') },
-  { id: 'blackpepper', name: 'Black Pepper',  image: require('../../../assets/images/crops/blackpepper.jpg') },
-  { id: 'cardamom',    name: 'Cardamom',      image: require('../../../assets/images/crops/cardamom.jpg') },
-  { id: 'vanilla',     name: 'Vanilla',       image: require('../../../assets/images/crops/vanilla.jpg') },
-  { id: 'cinnamon',    name: 'Cinnamon',      image: require('../../../assets/images/crops/cinnamon.jpg') },
-  { id: 'arecanut',    name: 'Arecanut',      image: require('../../../assets/images/crops/arecanut.jpg') },
+  { id: 'blackpepper', name: 'Black Pepper',  image: require('../../../assets/images/crops/blackpepper.png') },
+  { id: 'cardamom',    name: 'Cardamom',      image: require('../../../assets/images/crops/cardamom.png') },
+  { id: 'vanilla',     name: 'Vanilla',       image: require('../../../assets/images/crops/vanilla.png') },
+  { id: 'cinnamon',    name: 'Cinnamon',      image: require('../../../assets/images/crops/cinnamon.png') },
+  { id: 'arecanut',    name: 'Arecanut',      image: require('../../../assets/images/crops/arecanut.png') },
   { id: 'coconut',     name: 'Coconut',       image: require('../../../assets/images/crops/coconut.jpg') },
   { id: 'tea',         name: 'Tea',           image: require('../../../assets/images/crops/tea.jpg') },
   { id: 'orange',      name: 'Orange',        image: require('../../../assets/images/crops/orange.jpg') },
@@ -35,6 +36,7 @@ export default function MarketRatesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const userLocation = useUserLocation();
 
   const filtered = CROPS.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -57,6 +59,14 @@ export default function MarketRatesScreen() {
       {/* Sub-header */}
       <View style={[styles.subHeader, { backgroundColor: colors.primaryContainer }]}>
         <Text style={[styles.subTitle, { color: colors.primaryDark }]}>Select a crop to view market prices</Text>
+        {!userLocation.loading && (userLocation.district || userLocation.state) && (
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={12} color={colors.primaryDark} />
+            <Text style={[styles.locationText, { color: colors.primaryDark }]}>
+              {[userLocation.district, userLocation.state].filter(Boolean).join(', ')}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Search */}
@@ -96,7 +106,7 @@ export default function MarketRatesScreen() {
                 onPress={() => router.push(`/market-rates/${encodeURIComponent(crop.name)}` as any)}
               >
                 <View style={styles.imageWrap}>
-                  <Image source={crop.image} style={styles.cropImage} resizeMode="cover" />
+                  <Image source={crop.image} style={styles.cropImage} resizeMode={['blackpepper','cardamom','vanilla','cinnamon','arecanut'].includes(crop.id) ? 'contain' : 'cover'} />
                 </View>
                 <Text style={[styles.cropName, { color: colors.text }]} numberOfLines={2}>
                   {crop.name}
@@ -130,6 +140,8 @@ const styles = StyleSheet.create({
 
   subHeader: { paddingHorizontal: 16, paddingVertical: 10 },
   subTitle: { fontSize: 13, fontWeight: '600' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  locationText: { fontSize: 11, fontWeight: '500' },
 
   searchWrap: {
     flexDirection: 'row',
@@ -167,7 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
-  cropImage: { width: 80, height: 80 },
+  cropImage: { width: 80, height: 80, borderRadius: 20 },
 
   cropName: { fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
 

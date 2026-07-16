@@ -12,7 +12,6 @@ const NAV_MAIN: { label: string; icon: FeatherIconName; key: string }[] = [
   { label: 'Users',           icon: 'users',        key: 'users' },
   { label: 'Profiles',        icon: 'user',         key: 'profiles' },
   { label: 'Communities',     icon: 'globe',        key: 'communities' },
-  { label: 'Feeds',           icon: 'rss',          key: 'feeds' },
   { label: 'Events',          icon: 'calendar',     key: 'events' },
   { label: 'Stories',         icon: 'book-open',    key: 'stories' },
 ];
@@ -62,6 +61,8 @@ export default function AdminShell({ children, title }: Props) {
 
   const renderItem = (item: typeof NAV_MAIN[0]) => {
     const active = currentKey === item.key;
+    const commCount = item.key === 'communities' ? pendingData.communities.length
+      : item.key === 'events' ? pendingData.events.length : 0;
     return (
       <Pressable
         key={item.key}
@@ -76,6 +77,11 @@ export default function AdminShell({ children, title }: Props) {
           <Feather name={item.icon} size={16} color={active ? '#16A34A' : '#64748B'} />
         </View>
         <Text style={[s.navLabel, active && s.navLabelActive]}>{item.label}</Text>
+        {commCount > 0 && (
+          <View style={s.navBadge}>
+            <Text style={s.navBadgeText}>{commCount > 99 ? '99+' : commCount}</Text>
+          </View>
+        )}
       </Pressable>
     );
   };
@@ -270,8 +276,14 @@ const s = StyleSheet.create({
     marginRight: 10, backgroundColor: '#F8FAFC',
   },
   navIconWrapActive: { backgroundColor: '#DCFCE7' },
-  navLabel: { fontSize: 13, color: '#64748B', fontWeight: '500' },
+  navLabel: { fontSize: 13, color: '#64748B', fontWeight: '500', flex: 1 },
   navLabelActive: { color: '#15803D', fontWeight: '600' },
+  navBadge: {
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#F59E0B', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4, marginLeft: 4,
+  },
+  navBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   divider: { height: 1, backgroundColor: '#F1F5F9', marginHorizontal: 10, marginVertical: 4 },
   logoutBtn: {

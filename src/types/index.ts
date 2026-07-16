@@ -123,6 +123,12 @@ export interface Event {
   endsAt?: string;
   coverUrl?: string;
   rsvpCount: number;
+  interestedCount: number;
+  likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
+  isInterested?: boolean;
+  isLiked?: boolean;
   createdAt: string;
   updatedAt: string;
   userRsvpStatus?: 'GOING' | 'MAYBE' | 'NOT_GOING';
@@ -131,7 +137,7 @@ export interface Event {
 export interface Notification {
   id: string;
   recipientId: string;
-  type: 'LIKE' | 'COMMENT' | 'FOLLOW' | 'COMMUNITY_JOIN' | 'EVENT_REMINDER' | 'MENTION' | 'MESSAGE' | 'CONNECTION_REQUEST' | 'CONNECTION_ACCEPTED';
+  type: 'LIKE' | 'COMMENT' | 'FOLLOW' | 'COMMUNITY_JOIN' | 'EVENT_REMINDER' | 'MENTION' | 'MESSAGE' | 'CONNECTION_REQUEST' | 'CONNECTION_ACCEPTED' | 'EVENT_INTERESTED' | 'EVENT_LIKE' | 'EVENT_COMMENT';
   actorId?: string;
   entityId?: string;
   entityType?: string;

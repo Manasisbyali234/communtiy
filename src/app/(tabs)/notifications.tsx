@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 import { useNotificationsQuery, useMarkAllReadMutation, useNotificationSocket } from '../../api/chat';
 import { useAcceptConnectionMutation, useRejectConnectionMutation } from '../../api/connections';
+import { useApproveMemberMutation, useRejectMemberMutation } from '../../api/community';
 import Avatar from '../../components/common/Avatar';
 import Skeleton from '../../components/feedback/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,7 +48,12 @@ export default function NotificationsScreen() {
   const markAllRead = useMarkAllReadMutation();
   const acceptConn = useAcceptConnectionMutation();
   const rejectConn = useRejectConnectionMutation();
+  const approveMember = useApproveMemberMutation();
+  const rejectMember = useRejectMemberMutation();
   useNotificationSocket();
+
+  // Track which notifications have been acted on: id -> 'approved' | 'rejected' | 'accepted' | 'declined'
+  const [handled, setHandled] = useState<Record<string, string>>({});
 
   const renderIcon = (type: string) => {
     const cfg = ICON_MAP[type] ?? ICON_MAP['COMMUNITY_JOIN'];
@@ -60,6 +66,9 @@ export default function NotificationsScreen() {
 
   const renderItem = ({ item }: { item: any }) => {
     const isConnRequest = item.type === 'CONNECTION_REQUEST';
+    const isCommunityJoinRequest = item.type === 'COMMUNITY_JOIN' && item.entityId && item.actorId;
+    const handledStatus = handled[item.id];
+
     return (
       <View
         style={[
@@ -77,44 +86,106 @@ export default function NotificationsScreen() {
 
         <View style={styles.details}>
           <Text style={{ fontSize: typography.sizes.sm, color: colors.text, lineHeight: 18 }}>
-            <Text style={{ fontWeight: 'bold' }}>{item.actor?.displayName ?? 'Someone'}</Text>
-            {item.body ? ` ${item.body}` : ''}
+            {item.actor
+              ? <><Text style={{ fontWeight: 'bold' }}>{item.actor.displayName}</Text>{item.body ? ` ${item.body}` : ''}</>
+              : item.body ?? ''}
           </Text>
           <Text style={{ marginTop: 2, color: colors.textMuted, fontSize: typography.sizes.xs }}>
             {formatTime(item.createdAt)}
           </Text>
 
           {isConnRequest && item.entityId && (
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.acceptBtn, { backgroundColor: colors.primary }]}
-                disabled={acceptConn.isPending || rejectConn.isPending}
-                onPress={() => acceptConn.mutate(item.entityId, {
-                  onSuccess: () => showToast('Connection accepted!', 'success'),
-                  onError: (e: any) => showToast(e?.response?.data?.message || 'Failed', 'error'),
-                })}
-              >
-                {acceptConn.isPending
-                  ? <ActivityIndicator size={12} color="#FFF" />
-                  : <Text style={styles.acceptTxt}>Accept</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.rejectBtn, { borderColor: colors.border }]}
-                disabled={acceptConn.isPending || rejectConn.isPending}
-                onPress={() => rejectConn.mutate(item.entityId, {
-                  onSuccess: () => showToast('Request rejected', 'info'),
-                  onError: (e: any) => showToast(e?.response?.data?.message || 'Failed', 'error'),
-                })}
-              >
-                {rejectConn.isPending
-                  ? <ActivityIndicator size={12} color={colors.textMuted} />
-                  : <Text style={[styles.rejectTxt, { color: colors.textSecondary }]}>Reject</Text>}
-              </TouchableOpacity>
-            </View>
+            handledStatus ? (
+              <View style={styles.handledBadge}>
+                <Ionicons
+                  name={handledStatus === 'accepted' ? 'checkmark-circle' : 'close-circle'}
+                  size={14}
+                  color={handledStatus === 'accepted' ? '#22c55e' : '#ef4444'}
+                />
+                <Text style={[styles.handledText, { color: handledStatus === 'accepted' ? '#22c55e' : '#ef4444' }]}>
+                  {handledStatus === 'accepted' ? 'Accepted' : 'Rejected'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.acceptBtn, { backgroundColor: colors.primary }]}
+                  disabled={acceptConn.isPending || rejectConn.isPending}
+                  onPress={() => acceptConn.mutate(item.entityId, {
+                    onSuccess: () => { setHandled((h) => ({ ...h, [item.id]: 'accepted' })); showToast('Connection accepted!', 'success'); },
+                    onError: (e: any) => showToast(e?.response?.data?.message || 'Failed', 'error'),
+                  })}
+                >
+                  {acceptConn.isPending
+                    ? <ActivityIndicator size={12} color="#FFF" />
+                    : <Text style={styles.acceptTxt}>Accept</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rejectBtn, { borderColor: colors.border }]}
+                  disabled={acceptConn.isPending || rejectConn.isPending}
+                  onPress={() => rejectConn.mutate(item.entityId, {
+                    onSuccess: () => { setHandled((h) => ({ ...h, [item.id]: 'rejected' })); showToast('Request rejected', 'info'); },
+                    onError: (e: any) => showToast(e?.response?.data?.message || 'Failed', 'error'),
+                  })}
+                >
+                  {rejectConn.isPending
+                    ? <ActivityIndicator size={12} color={colors.textMuted} />
+                    : <Text style={[styles.rejectTxt, { color: colors.textSecondary }]}>Reject</Text>}
+                </TouchableOpacity>
+              </View>
+            )
+          )}
+
+          {isCommunityJoinRequest && (
+            handledStatus ? (
+              <View style={styles.handledBadge}>
+                <Ionicons
+                  name={handledStatus === 'approved' ? 'checkmark-circle' : 'close-circle'}
+                  size={14}
+                  color={handledStatus === 'approved' ? '#22c55e' : '#ef4444'}
+                />
+                <Text style={[styles.handledText, { color: handledStatus === 'approved' ? '#22c55e' : '#ef4444' }]}>
+                  {handledStatus === 'approved' ? 'Approved' : 'Rejected'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.acceptBtn, { backgroundColor: colors.primary }]}
+                  disabled={approveMember.isPending || rejectMember.isPending}
+                  onPress={() => approveMember.mutate(
+                    { communityId: item.entityId, userId: item.actorId },
+                    {
+                      onSuccess: () => { setHandled((h) => ({ ...h, [item.id]: 'approved' })); showToast('Member approved!', 'success'); },
+                      onError: (e: any) => showToast(e?.response?.data?.message || 'Failed', 'error'),
+                    }
+                  )}
+                >
+                  {approveMember.isPending
+                    ? <ActivityIndicator size={12} color="#FFF" />
+                    : <Text style={styles.acceptTxt}>Approve</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rejectBtn, { borderColor: colors.border }]}
+                  disabled={approveMember.isPending || rejectMember.isPending}
+                  onPress={() => rejectMember.mutate(
+                    { communityId: item.entityId, userId: item.actorId },
+                    {
+                      onSuccess: () => { setHandled((h) => ({ ...h, [item.id]: 'rejected' })); showToast('Request rejected', 'info'); },
+                      onError: (e: any) => showToast(e?.response?.data?.message || 'Failed', 'error'),
+                    }
+                  )}
+                >
+                  {rejectMember.isPending
+                    ? <ActivityIndicator size={12} color={colors.textMuted} />
+                    : <Text style={[styles.rejectTxt, { color: colors.textSecondary }]}>Reject</Text>}
+                </TouchableOpacity>
+              </View>
+            )
           )}
         </View>
 
-        {!item.isRead && !isConnRequest && (
+        {!item.isRead && !isConnRequest && !isCommunityJoinRequest && (
           <View style={[styles.dot, { backgroundColor: colors.primary }]} />
         )}
       </View>
@@ -195,6 +266,8 @@ const styles = StyleSheet.create({
   details: { flex: 1, marginLeft: 14, marginRight: 8 },
   dot: { width: 8, height: 8, borderRadius: 4, marginTop: 4 },
   actionRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  handledBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  handledText: { fontSize: 13, fontWeight: '600' },
   acceptBtn: {
     paddingHorizontal: 18, paddingVertical: 7, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center', minWidth: 80,

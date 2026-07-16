@@ -204,12 +204,7 @@ export default function CreatePost() {
       } as any,
       {
         onSuccess: (data) => {
-          const isCommunityPost = !!selectedCommId;
-          if (isCommunityPost) {
-            showToast('Your post has been submitted successfully and is awaiting admin approval. It will be published once approved.', 'success');
-          } else {
-            showToast('Shared successfully!', 'success');
-          }
+          showToast('Shared successfully!', 'success');
           setContent(''); setSelectedCommId(''); setTaggedUsers([]); setMediaUrl(null); setMediaKind(null); setLocation(''); setUploadError(null);
           router.replace('/(tabs)' as any);
         },
