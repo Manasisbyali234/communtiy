@@ -27,9 +27,11 @@ function RootLayoutContent() {
   const { colors, isDark } = useTheme();
   const segments = useSegments();
   const router = useRouter();
-  const { isAuthenticated, isOnboarded, isLoading, token } = useAuthStore();
+  const { isAuthenticated, isOnboarded, isLoading, token, user } = useAuthStore();
+  const isLoggedIn = isAuthenticated || !!user;
   const [tokensInitialized, setTokensInitialized] = useState(false);
   const redirectedToIntended = useRef(false);
+  const isNavigating = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -52,13 +54,13 @@ function RootLayoutContent() {
 
 // Initialize socket once when authenticated and token is in memory
   useEffect(() => {
-    if (isAuthenticated && tokensInitialized && token) {
+    if (isLoggedIn && tokensInitialized && token) {
       void initSocket();
     }
     return () => {
-      if (!isAuthenticated) disconnectSocket();
+      if (!isLoggedIn) disconnectSocket();
     };
-  }, [isAuthenticated, tokensInitialized, token]);
+  }, [isLoggedIn, tokensInitialized, token]);
 
   useEffect(() => {
     if (isLoading || !tokensInitialized) return;
@@ -70,21 +72,23 @@ function RootLayoutContent() {
     // Admin routes are handled by their own layout — skip user auth guard
     if (inAdminGroup) return;
 
-    if (!isAuthenticated) {
-      if (!inAuthGroup) {
+    if (!isLoggedIn) {
+      if (!inAuthGroup && !isNavigating.current) {
+        isNavigating.current = true;
         router.replace(!isOnboarded ? '/(auth)/onboarding' : '/(auth)/login');
       }
     } else {
+      isNavigating.current = false;
       if (inAuthGroup || !inAppGroup) {
-        if (!redirectedToIntended.current && intendedPath && !intendedPath.startsWith('/(auth)') && intendedPath !== '/') {
+        if (!redirectedToIntended.current && intendedPath && !intendedPath.startsWith('/(auth)') && intendedPath !== '/' && intendedPath !== '/index') {
           redirectedToIntended.current = true;
           router.replace(intendedPath as any);
-        } else if (!inAppGroup) {
+        } else {
           router.replace('/(tabs)');
         }
       }
     }
-  }, [isAuthenticated, isOnboarded, isLoading, tokensInitialized, segments]);
+  }, [isLoggedIn, isOnboarded, isLoading, tokensInitialized, segments]);
 
   if (!tokensInitialized) {
     return (

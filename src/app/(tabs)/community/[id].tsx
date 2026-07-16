@@ -9,6 +9,7 @@ import { Image } from 'expo-image';
 import { useTheme } from '../../../theme';
 import { useCommunityDetailsQuery, useJoinCommunityMutation, usePendingMembersQuery, useApproveMemberMutation, useRejectMemberMutation } from '../../../api/community';
 import { useCommunityPostsQuery } from '../../../api/feed';
+import { shareUrl } from '../../../utils/shareUtils';
 import PostCard from '../../../components/feed/PostCard';
 import CommentSheet from '../../../components/feed/CommentSheet';
 import Avatar from '../../../components/common/Avatar';
@@ -53,6 +54,17 @@ export default function CommunityDetails() {
     );
   };
 
+  const handleShare = async () => {
+    if (!community) return;
+    const base = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+    const link = `${base}/community/${community.id}`;
+    const ok = await shareUrl(
+      `Check out the ${community.name} community on GowdaCommunity! ${link}`,
+      link
+    );
+    showToast(ok ? 'Link copied to clipboard!' : 'Could not share community', ok ? 'success' : 'error');
+  };
+
   const handleCommentPress = (postId: string) => {
     setSelectedPostId(postId);
     setCommentSheetVisible(true);
@@ -79,6 +91,12 @@ export default function CommunityDetails() {
           style={[styles.backBtn, { top: insets.top + 10, backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}
         >
           <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleShare}
+          style={[styles.shareBtn, { top: insets.top + 10, backgroundColor: 'rgba(0, 0, 0, 0.5)' }]}
+        >
+          <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
@@ -349,6 +367,15 @@ const styles = StyleSheet.create({
   backBtn: {
     position: 'absolute',
     left: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareBtn: {
+    position: 'absolute',
+    right: 20,
     width: 38,
     height: 38,
     borderRadius: 19,

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   StyleSheet, Text, View, ScrollView, TouchableOpacity,
-  Share, Dimensions, Platform, Animated, ActivityIndicator,
+  Dimensions, Platform, Animated, ActivityIndicator,
 } from 'react-native';
+import { shareUrl } from '../../../utils/shareUtils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -142,6 +143,7 @@ export default function UserProfileScreen() {
 
   const scrollY = useRef(new Animated.Value(0)).current;
 
+  const showToast = useToastStore((state) => state.showToast);
   const { data: user, isLoading: userLoading } = useUserQuery(id);
   const { data: userPosts = [], isLoading: postsLoading } = useUserPostsQuery(id);
 
@@ -152,8 +154,14 @@ export default function UserProfileScreen() {
 
   const handleShare = useCallback(async () => {
     if (!user) return;
-    await Share.share({ message: `Check out ${user.displayName}'s profile on GowdaCommunity!` });
-  }, [user]);
+    const base = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+    const link = `${base}/user/${user.id}`;
+    const ok = await shareUrl(
+      `Check out ${user.displayName}'s profile on GowdaCommunity! ${link}`,
+      link
+    );
+    showToast(ok ? 'Link copied to clipboard!' : 'Could not share profile', ok ? 'success' : 'error');
+  }, [user, showToast]);
 
   // Token shortcuts
   const G = colors.primary;

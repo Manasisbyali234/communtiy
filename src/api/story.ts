@@ -65,7 +65,8 @@ export function useCreateStoryMutation() {
   return useMutation<Story, Error, { mediaUrl: string; mediaType: 'IMAGE' | 'VIDEO' }>({
     mutationFn: async ({ mediaUrl, mediaType }) => {
       const res = await apiClient.post<ApiResponse<Story>>('/stories', { mediaUrl, mediaType });
-      return res.data.data;
+      const data = res.data.data;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: storyKeys.feed() });

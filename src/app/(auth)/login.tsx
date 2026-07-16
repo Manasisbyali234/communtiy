@@ -40,18 +40,13 @@ export default function Login() {
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
-      const response = await apiClient.post<{ data: { user: any; accessToken: string; refreshToken: string } }>('/auth/login', {
-        email: data.email,
-        password: data.password,
-      });
-      
-      const { user, accessToken, refreshToken } = response.data.data;
+      const res = await apiClient.post('/auth/login', { email: data.email, password: data.password });
+      const { user, accessToken, refreshToken } = res.data.data;
       await login(user, accessToken, refreshToken);
       showToast('Logged in successfully!', 'success');
       router.replace('/(tabs)');
     } catch (e: any) {
-      const message = e.response?.data?.message || 'Login failed. Please check credentials.';
-      showToast(message, 'error');
+      showToast(e.response?.data?.message ?? e.message ?? 'Login failed. Please check credentials.', 'error');
     }
   };
 

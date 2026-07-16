@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authController } from '../../controllers/auth.controller';
 import { validate } from '../../middleware/validate';
 import { auth } from '../../middleware/auth';
+import { emailRateLimiter } from '../../middleware/rateLimiter';
 
 const router = Router();
 
@@ -49,11 +50,11 @@ const AppleSchema = z.object({ identityToken: z.string().min(1) });
 router.post('/register', validate({ body: RegisterSchema }), authController.register);
 router.post('/login', validate({ body: LoginSchema }), authController.login);
 router.post('/refresh', validate({ body: RefreshSchema }), authController.refresh);
-router.post('/forgot-password', validate({ body: ForgotPasswordSchema }), authController.forgotPassword);
+router.post('/forgot-password', emailRateLimiter, validate({ body: ForgotPasswordSchema }), authController.forgotPassword);
 router.post('/reset-password', validate({ body: ResetPasswordSchema }), authController.resetPassword);
 
 // Passwordless OTP login
-router.post('/otp-login', validate({ body: OtpLoginRequestSchema }), authController.requestOtpLogin);
+router.post('/otp-login', emailRateLimiter, validate({ body: OtpLoginRequestSchema }), authController.requestOtpLogin);
 router.post('/otp-verify', validate({ body: OtpLoginVerifySchema }), authController.verifyOtpLogin);
 
 // Social sign-in
@@ -63,7 +64,7 @@ router.post('/apple', validate({ body: AppleSchema }), authController.appleSignI
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post('/logout', auth, validate({ body: RefreshSchema }), authController.logout);
 router.post('/verify-email', auth, validate({ body: OtpSchema }), authController.verifyEmail);
-router.post('/resend-verification', auth, authController.resendVerification);
+router.post('/resend-verification', auth, emailRateLimiter, authController.resendVerification);
 router.post('/change-password', auth, validate({ body: ChangePasswordSchema }), authController.changePassword);
 
 export default router;

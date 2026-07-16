@@ -25,6 +25,7 @@ import { useEventsQuery } from '../../api/event';
 import { apiClient } from '../../api/client';
 import { useUnreadCountQuery } from '../../api/chat';
 import { useMyConnectionCountQuery, useConnectionSocket } from '../../api/connections';
+import { shareUrl } from '../../utils/shareUtils';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -192,17 +193,14 @@ export default function ProfileScreen() {
   };
 
   const handleShare = useCallback(async () => {
-    try {
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(window.location.href);
-        showToast('Link copied to clipboard!', 'success');
-      } else {
-        await Share.share({ message: `Check out ${user?.displayName || 'User'}'s profile on GowdaCommunity!` });
-      }
-    } catch (e) {
-      showToast('Could not share profile', 'error');
-    }
-  }, [showToast]);
+    const base = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+    const link = user?.id ? `${base}/user/${user.id}` : `${base}/profile`;
+    const ok = await shareUrl(
+      `Check out ${user?.displayName || 'User'}'s profile on GowdaCommunity! ${link}`,
+      link
+    );
+    showToast(ok ? 'Link copied to clipboard!' : 'Could not share profile', ok ? 'success' : 'error');
+  }, [user, showToast]);
 
   const handleMessage = () => {
     router.push('/chat/new' as any);

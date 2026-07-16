@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import { useEffect } from 'react';
 import { getSocket } from './socket';
+import { useAuthStore } from '../store/authStore';
 
 export type ConnectionStatus = 'NONE' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'ACCEPTED';
 
@@ -86,7 +87,7 @@ export function useSendConnectionRequestMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (userId: string) => apiClient.post(`/connections/${userId}/request`),
-    onSuccess: (_, userId) => {
+    onSuccess: (_data, userId) => {
       qc.setQueryData<ConnectionStatus>(connKeys.status(userId), 'PENDING_SENT');
     },
   });
@@ -96,7 +97,7 @@ export function useAcceptConnectionMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (requestId: string) => apiClient.post(`/connections/requests/${requestId}/accept`),
-    onSuccess: () => {
+    onSuccess: (_data, requestId) => {
       qc.invalidateQueries({ queryKey: ['connections'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -107,7 +108,7 @@ export function useRejectConnectionMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (requestId: string) => apiClient.post(`/connections/requests/${requestId}/reject`),
-    onSuccess: () => {
+    onSuccess: (_data, requestId) => {
       qc.invalidateQueries({ queryKey: ['connections', 'pending'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
     },

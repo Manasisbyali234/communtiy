@@ -6,6 +6,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePostQuery, useLikePostMutation, useSavePostMutation, useAddCommentMutation } from '../../../api/feed';
+import { shareUrl } from '../../../utils/shareUtils';
 import VideoPostPlayer from '../../../components/common/VideoPostPlayer';
 import Avatar from '../../../components/common/Avatar';
 import CommentSheet from '../../../components/feed/CommentSheet';
@@ -74,6 +75,16 @@ export default function PostDetail() {
   const handleSave = () => {
     saveMutation.mutate(post.id);
     showToast(post.isBookmarked ? 'Post removed from saved.' : 'Post saved to bookmarks!', 'success');
+  };
+
+  const handleShare = async () => {
+    const base = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '';
+    const link = `${base}/post/${post.id}`;
+    const ok = await shareUrl(
+      `Check out this post on GowdaCommunity! ${link}`,
+      link
+    );
+    showToast(ok ? 'Link copied to clipboard!' : 'Could not share post', ok ? 'success' : 'error');
   };
 
   const handleCommentSubmit = () => {
@@ -199,7 +210,7 @@ export default function PostDetail() {
             </TouchableOpacity>
 
             {/* Share Action */}
-            <TouchableOpacity style={styles.actionItem} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.actionItem} activeOpacity={0.8} onPress={handleShare}>
               <View style={styles.actionIconContainer}>
                 <Ionicons name="paper-plane-outline" size={26} color="#FFFFFF" />
               </View>

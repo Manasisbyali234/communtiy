@@ -69,15 +69,22 @@ export const useAuthStore = create<AuthState>()(
       // On web: tokens come from zustand persist (AsyncStorage) — wait for hydration instead.
       // On native: tokens are in SecureStore, not persisted by zustand.
       initSecureTokens: async () => {
-        if (Platform.OS === 'web') {
-          // Tokens are already rehydrated by zustand persist on web — nothing to do.
-          return;
-        }
+        if (Platform.OS === 'web') return;
+        // Wait for zustand to rehydrate from AsyncStorage first
+        await new Promise<void>((resolve) => {
+          if (useAuthStore.persist.hasHydrated()) { resolve(); return; }
+          const unsub = useAuthStore.persist.onFinishHydration(() => { unsub(); resolve(); });
+          setTimeout(resolve, 300); // safety fallback
+        });
         try {
           const token = await SecureStore.getItemAsync('accessToken');
           const refreshToken = await SecureStore.getItemAsync('refreshToken');
           if (token && refreshToken) {
-            set({ token, refreshToken, isAuthenticated: true });
+            // Restore tokens in memory, keep persisted isAuthenticated/user
+            set({ token, refreshToken });
+          } else {
+            // No tokens in SecureStore — clear auth state
+            set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
           }
         } catch (e) {
           console.error('Failed to load secure tokens', e);
@@ -114,13 +121,15 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
       },
 
-      updateProfile: (updates) =>
+      updateProfile: (updates) => {
         set((state) => ({
           user: state.user ? normalizeUser({ ...state.user, ...updates }) : null,
-        })),
+        }));
+      },
 
       completeOnboarding: () => set({ isOnboarded: true }),
       setLoading: (isLoading) => set({ isLoading }),
+
     }),
     {
       name: 'community-auth-storage',
@@ -128,7 +137,8 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         isOnboarded: state.isOnboarded,
-        ...(Platform.OS === 'web' ? { token: state.token, refreshToken: state.refreshToken, isAuthenticated: state.isAuthenticated } : {}),
+        isAuthenticated: state.isAuthenticated,
+        ...(Platform.OS === 'web' ? { token: state.token, refreshToken: state.refreshToken } : {}),
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.user) {

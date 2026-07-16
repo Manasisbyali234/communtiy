@@ -10,8 +10,8 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { apiClient } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
+import { apiClient } from '../../api/client';
 
 const registerSchema = z
   .object({
@@ -52,27 +52,18 @@ export default function Register() {
 
   const onSubmit = async (data: RegisterFormValues) => {
     try {
-      const response = await apiClient.post<{ data: { user: any; accessToken: string; refreshToken: string } }>('/auth/register', {
-        username: data.username,
+      const res = await apiClient.post('/auth/register', {
         email: data.email,
         password: data.password,
-        displayName: data.username, // Default to username, they can edit profile later
+        username: data.username,
+        displayName: data.username,
       });
-      
-      const { user, accessToken, refreshToken } = response.data.data;
-      
-      // Store tokens but they will be unverified
-      useAuthStore.getState().login(user, accessToken, refreshToken);
-      
-      showToast('Account created! Please verify your OTP.', 'success');
-      router.push({
-        pathname: '/(auth)/otp',
-        params: { email: data.email },
-      });
+      const { user, accessToken, refreshToken } = res.data.data;
+      await useAuthStore.getState().login(user, accessToken, refreshToken);
+      showToast('Account created successfully!', 'success');
+      router.replace('/(tabs)');
     } catch (e: any) {
-      const message = e.response?.data?.message ?? e.message ?? 'Registration failed. Try again.';
-      showToast(message, 'error');
-      if (!e.response) console.error('[Register] error:', e.message);
+      showToast(e.response?.data?.message ?? e.message ?? 'Registration failed. Try again.', 'error');
     }
   };
 

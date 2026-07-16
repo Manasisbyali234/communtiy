@@ -50,7 +50,8 @@ export function useSendMessageMutation() {
   return useMutation<Message, Error, { chatId: string; content: string }>({
     mutationFn: async ({ chatId, content }) => {
       const res = await apiClient.post<ApiResponse<Message>>(`/messages/conversations/${chatId}`, { content });
-      return res.data.data;
+      const data = res.data.data;
+      return data;
     },
     onMutate: async ({ chatId, content }) => {
       await queryClient.cancelQueries({ queryKey: chatKeys.messages(chatId) });

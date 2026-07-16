@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { apiClient, API_BASE_URL } from './client';
 import { Event, ApiResponse, PaginatedResponse } from '../types';
 import { useEventStore } from '../store/eventStore';
+import { useAuthStore } from '../store/authStore';
 
 const getBase = () => API_BASE_URL.replace('/api/v1', '');
 const toAbs = (url?: string): string | undefined => {
@@ -202,10 +203,10 @@ export function useCreateEventMutation() {
       coverUrl?: string;
     }) => {
       const res = await apiClient.post<ApiResponse<Event>>('/events', payload, { timeout: 30000 });
-      return normalizeEvent(res.data.data);
+      const data = normalizeEvent(res.data.data);
+      return data;
     },
     onSuccess: () => {
-      // Do NOT add to local store — event is PENDING_APPROVAL and must not show publicly
       queryClient.invalidateQueries({ queryKey: eventKeys.list() });
     },
     onError: () => {

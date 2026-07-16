@@ -178,7 +178,7 @@ export function useCreatePostMutation() {
       });
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: feedKeys.posts() });
     },
   });
@@ -253,7 +253,8 @@ export function useAddCommentMutation() {
   return useMutation<Comment, Error, { postId: string; content: string }>({
     mutationFn: async ({ postId, content }) => {
       const res = await apiClient.post<ApiResponse<Comment>>(`/posts/${postId}/comments`, { content });
-      return res.data.data;
+      const data = res.data.data;
+      return data;
     },
     onMutate: async ({ postId, content }) => {
       await queryClient.cancelQueries({ queryKey: feedKeys.comments(postId) });
